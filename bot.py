@@ -19,6 +19,7 @@ def main_keyboard():
     buttons = [
         [KeyboardButton(text="📝 Добавить рецепт")],
         [KeyboardButton(text="📖 Мои рецепты")],
+        [KeyboardButton(text="📚 Базовые рецепты")],
         [KeyboardButton(text="🔍 Найти рецепт")],
         [KeyboardButton(text="🍽 Меню на сегодня")],
         [KeyboardButton(text="🛒 Список покупок")],
@@ -26,6 +27,7 @@ def main_keyboard():
         [KeyboardButton(text="⭐ Избранное")],
         [KeyboardButton(text="🔥 Топ рецептов")],
         [KeyboardButton(text="🎉 Праздничные")],
+        [KeyboardButton(text="🏋️ Спортивное питание")],
         [KeyboardButton(text="🥗 По типу питания")],
         [KeyboardButton(text="❓ Помощь")]
     ]
@@ -52,6 +54,7 @@ async def start_command(message: types.Message):
         "✅ Отслеживать любимые рецепты\n"
         "✅ Показывать топ популярных блюд\n"
         "🎉 Праздничные рецепты (Оливье, Сельдь под шубой и другие)\n"
+        "🏋️ Спортивное питание (ПП, высокий белок)\n"
         "🥗 Фильтр по типу питания (диетическое/постное/обычное)\n\n"
         "👇 Выбирай кнопки внизу!",
         reply_markup=main_keyboard()
@@ -145,19 +148,87 @@ async def top_recipes(message: types.Message):
     
     await message.answer(response, parse_mode="Markdown")
 
+# ========== БАЗОВЫЕ РЕЦЕПТЫ ==========
+@dp.message(lambda msg: msg.text == "📚 Базовые рецепты")
+async def show_base_recipes(message: types.Message):
+    from database import cursor
+    cursor.execute('SELECT * FROM recipes WHERE user_id = 0 ORDER BY id')
+    recipes = cursor.fetchall()
+    
+    if not recipes:
+        await message.answer("📚 Базовые рецепты временно недоступны")
+        return
+    
+    response = "📚 **Базовые рецепты (стандартные):**\n\n"
+    for r in recipes[:25]:
+        emoji = ""
+        if r[8] == "праздничное":
+            emoji = "🎉 "
+        elif r[8] == "диетическое":
+            emoji = "🥗 "
+        elif r[8] == "спортивное":
+            emoji = "🏋️ "
+        response += f"{emoji}🍽 {r[2]}\n"
+        response += f"   📂 {r[3]} | ⏰ {r[6]} мин | 🔥 {r[7]} ккал\n"
+        response += "   ─────────────\n"
+    await message.answer(response, parse_mode="Markdown")
+
+# ========== МОИ РЕЦЕПТЫ ==========
+@dp.message(lambda msg: msg.text == "📖 Мои рецепты")
+async def show_my_recipes(message: types.Message):
+    recipes = get_recipes(message.from_user.id)
+    user_recipes = [r for r in recipes if r[1] != 0]
+    
+    if not user_recipes:
+        await message.answer("📭 У тебя пока нет своих рецептов. Добавь через «Добавить рецепт»\n\n📚 Чтобы посмотреть базовые рецепты, нажми «Базовые рецепты»")
+        return
+    
+    response = "📖 **Мои рецепты (добавленные тобой):**\n\n"
+    for r in user_recipes[:20]:
+        emoji = ""
+        if r[8] == "праздничное":
+            emoji = "🎉 "
+        elif r[8] == "диетическое":
+            emoji = "🥗 "
+        elif r[8] == "спортивное":
+            emoji = "🏋️ "
+        response += f"{emoji}🍽 {r[2]}\n"
+        response += f"   📂 {r[3]} | ⏰ {r[6]} мин | 🔥 {r[7]} ккал\n"
+        if r[9]:
+            response += f"   🏷 {r[9]}\n"
+        response += "   ─────────────\n"
+    await message.answer(response, parse_mode="Markdown")
+
 # ========== ПРАЗДНИЧНЫЕ РЕЦЕПТЫ ==========
 @dp.message(lambda msg: msg.text == "🎉 Праздничные")
 async def show_holiday_recipes(message: types.Message):
     recipes = get_recipes_by_type(message.from_user.id, "праздничное")
     
     if not recipes:
-        await message.answer("🎉 Праздничные рецепты:\n\n• Оливье\n• Сельдь под шубой\n• Мимоза\n• Наполеон\n\n✨ Эти рецепты уже в базе! Нажми «Мои рецепты» чтобы увидеть их.")
+        await message.answer("🎉 Праздничные рецепты:\n\n• Оливье (380 ккал)\n• Сельдь под шубой (420 ккал)\n• Мимоза (340 ккал)\n• Наполеон (520 ккал)\n• Тирамису (480 ккал)\n\n✨ Нажми «Базовые рецепты», чтобы увидеть их все!")
         return
     
     response = "🎉 **Праздничные рецепты:**\n\n"
     for r in recipes:
-        response += f"🍽 {r[2]}\n   ⏰ {r[6]} мин | 🔥 {r[7]} ккал\n   📂 {r[3]}\n   ─────────────\n"
+        response += f"🍽 {r[2]}\n   ⏰ {r[6]} мин | 🔥 {r[7]} ккал\n   ─────────────\n"
     await message.answer(response, parse_mode="Markdown", reply_markup=main_keyboard())
+
+# ========== СПОРТИВНОЕ ПИТАНИЕ ==========
+@dp.message(lambda msg: msg.text == "🏋️ Спортивное питание")
+async def show_sport_recipes(message: types.Message):
+    recipes = get_recipes_by_type(message.from_user.id, "спортивное")
+    
+    if not recipes:
+        await message.answer("🏋️ Рецепты спортивного питания:\n\n• Куриное филе с гречкой (420 ккал, 200г)\n• Омлет с овощами (320 ккал, 150г)\n• Творог с ягодами (280 ккал, 250г)\n• Салат с тунцом (290 ккал, 300г)\n• Рис с лососем (480 ккал, 300г)\n• Протеиновый смузи (450 ккал, 400мл)\n• Запечённая индейка (420 ккал, 350г)\n• Овсяноблин (350 ккал, 180г)\n\n💪 Все рецепты содержат белок, подходят для набора массы или похудения!")
+        return
+    
+    response = "🏋️ **Спортивное питание (ПП, высокий белок):**\n\n"
+    for r in recipes:
+        response += f"🍽 {r[2]}\n"
+        response += f"   ⏰ {r[6]} мин | 🔥 {r[7]} ккал\n"
+        response += f"   📝 {r[4][:60]}...\n"
+        response += "   ─────────────\n"
+    await message.answer(response, parse_mode="Markdown")
 
 # ========== ПО ТИПУ ПИТАНИЯ ==========
 @dp.message(lambda msg: msg.text == "🥗 По типу питания")
@@ -200,22 +271,6 @@ async def show_by_type(message: types.Message):
 async def back_to_menu(message: types.Message):
     await message.answer("🔙 Возвращаюсь в главное меню", reply_markup=main_keyboard())
 
-# ========== МОИ РЕЦЕПТЫ ==========
-@dp.message(lambda msg: msg.text == "📖 Мои рецепты")
-async def show_recipes(message: types.Message):
-    recipes = get_recipes(message.from_user.id)
-    if not recipes:
-        await message.answer("📭 У тебя пока нет рецептов. Нажми «Добавить рецепт»")
-        return
-    
-    response = "📖 **Твои рецепты:**\n\n"
-    for r in recipes[:15]:
-        response += f"🍽 {r[2]}\n   📂 {r[3]}\n   ⏰ {r[6]} мин | 🔥 {r[7]} ккал\n"
-        if r[8] != "обычное" and r[8] != "":
-            response += f"   🏷 {r[8]}\n"
-        response += "   ─────────────\n"
-    await message.answer(response, parse_mode="Markdown")
-
 # ========== ПОИСК РЕЦЕПТА ==========
 @dp.message(lambda msg: msg.text == "🔍 Найти рецепт")
 async def find_recipe_start(message: types.Message):
@@ -247,16 +302,18 @@ async def help_command(message: types.Message):
     await message.answer(
         "📖 **Как пользоваться ботом:**\n\n"
         "📝 **Добавить рецепт** — создай новое блюдо\n"
-        "📖 **Мои рецепты** — список всех твоих блюд (включая стандартные)\n"
+        "📖 **Мои рецепты** — только твои рецепты\n"
+        "📚 **Базовые рецепты** — 50+ стандартных рецептов\n"
         "🔍 **Найти рецепт** — поиск по названию\n"
         "🍽 **Меню на сегодня** — случайный план питания\n"
         "🛒 **Список покупок** — все ингредиенты из всех рецептов\n"
         "🥗 **Что из остатков?** — напиши продукты, я подберу рецепт\n"
         "⭐ **Избранное** — сохраняй любимые рецепты\n"
         "🔥 **Топ рецептов** — самые популярные блюда\n"
-        "🎉 **Праздничные** — Оливье, Сельдь под шубой и другие\n"
+        "🎉 **Праздничные** — Оливье, Сельдь под шубой, Тирамису\n"
+        "🏋️ **Спортивное питание** — ПП рецепты с белком\n"
         "🥗 **По типу питания** — диетическое, постное, обычное\n\n"
-        "💡 **Совет:** В базе уже есть 46 рецептов! Просто нажми «Мои рецепты»",
+        "💡 **Совет:** В базе уже есть 50+ рецептов!",
         parse_mode="Markdown",
         reply_markup=main_keyboard()
     )
@@ -299,12 +356,12 @@ async def add_recipe_process(message: types.Message):
         try:
             state["calories"] = int(message.text)
             state["step"] = "type"
-            await message.answer("Шаг 7/8: Выбери тип питания (диетическое, постное, обычное, праздничное)")
+            await message.answer("Шаг 7/8: Выбери тип питания (диетическое, постное, обычное, праздничное, спортивное)")
         except:
             await message.answer("❌ Ошибка! Введи число калорий")
     
     elif step == "type":
-        valid_types = ["диетическое", "постное", "обычное", "праздничное"]
+        valid_types = ["диетическое", "постное", "обычное", "праздничное", "спортивное"]
         if message.text.lower() in valid_types:
             state["recipe_type"] = message.text.lower()
             state["step"] = "tags"
@@ -410,9 +467,9 @@ async def handle_messages(message: types.Message):
         return
     
     if not text.startswith('/') and text not in [
-        "📝 Добавить рецепт", "📖 Мои рецепты", "🔍 Найти рецепт", 
+        "📝 Добавить рецепт", "📖 Мои рецепты", "📚 Базовые рецепты", "🔍 Найти рецепт", 
         "🍽 Меню на сегодня", "🛒 Список покупок", "🥗 Что из остатков?", 
-        "⭐ Избранное", "🔥 Топ рецептов", "🎉 Праздничные", 
+        "⭐ Избранное", "🔥 Топ рецептов", "🎉 Праздничные", "🏋️ Спортивное питание",
         "🥗 По типу питания", "❓ Помощь", "🔙 Назад в меню",
         "🥗 Диетическое", "🌱 Постное", "🍳 Обычное"
     ]:
@@ -469,12 +526,11 @@ async def start_web():
 
 # ========== ЗАПУСК БОТА ==========
 async def main():
-    # Запускаем веб-сервер для Render
     asyncio.create_task(start_web())
-    
-    print("🤖 Бот ChefMind с 46 рецептами запущен!")
+    print("🤖 Бот ChefMind с 50+ рецептами запущен!")
     print("✅ В базе: завтраки, супы, салаты, основные блюда, десерты")
-    print("✅ Праздничные: Оливье, Сельдь под шубой, Мимоза, Наполеон")
+    print("✅ Праздничные: Оливье, Сельдь под шубой, Мимоза, Наполеон, Тирамису")
+    print("✅ Спортивное питание: 8 ПП-рецептов с белком")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
