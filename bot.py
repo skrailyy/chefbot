@@ -452,8 +452,26 @@ async def handle_callback(callback: types.CallbackQuery):
         else:
             await callback.answer("❌ Нельзя удалить стандартный рецепт")
 
+# ========== ВЕБ-КОСТЫЛЬ ДЛЯ RENDER ==========
+from aiohttp import web
+
+async def health_check(request):
+    return web.Response(text="Bot is running!")
+
+async def start_web():
+    app = web.Application()
+    app.router.add_get('/', health_check)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '0.0.0.0', 10000)
+    await site.start()
+    print("🌐 Веб-сервер запущен на порту 10000")
+
 # ========== ЗАПУСК БОТА ==========
 async def main():
+    # Запускаем веб-сервер для Render
+    asyncio.create_task(start_web())
+    
     print("🤖 Бот ChefMind с 46 рецептами запущен!")
     print("✅ В базе: завтраки, супы, салаты, основные блюда, десерты")
     print("✅ Праздничные: Оливье, Сельдь под шубой, Мимоза, Наполеон")
