@@ -2,7 +2,8 @@ import asyncio
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
-from config import BOT_TOKEN
+import os
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
 from database import add_recipe, get_recipes, find_recipe_by_name, delete_recipe
 
 bot = Bot(token=BOT_TOKEN)
