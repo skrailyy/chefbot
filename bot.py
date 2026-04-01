@@ -1,6 +1,7 @@
 import asyncio
 import os
 import random
+import aiohttp
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
@@ -524,13 +525,31 @@ async def start_web():
     await site.start()
     print("🌐 Веб-сервер запущен на порту 10000")
 
+# ========== ПИНГОВАТЕЛЬ (чтобы не засыпал) ==========
+async def ping_self():
+    """Каждые 10 минут отправляет запрос к самому себе"""
+    url = "https://chefbot-i2cx.onrender.com"  # ← ЗАМЕНИ НА СВОЙ URL
+    while True:
+        await asyncio.sleep(600)  # 10 минут
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url) as response:
+                    print(f"🏓 Пинг отправлен! Статус: {response.status}")
+        except Exception as e:
+            print(f"❌ Ошибка пинга: {e}")
+
 # ========== ЗАПУСК БОТА ==========
 async def main():
+    # Запускаем веб-сервер для Render
     asyncio.create_task(start_web())
+    # Запускаем пингователь (чтобы не засыпал)
+    asyncio.create_task(ping_self())
+    
     print("🤖 Бот ChefMind с 50+ рецептами запущен!")
     print("✅ В базе: завтраки, супы, салаты, основные блюда, десерты")
     print("✅ Праздничные: Оливье, Сельдь под шубой, Мимоза, Наполеон, Тирамису")
     print("✅ Спортивное питание: 8 ПП-рецептов с белком")
+    print("🏓 Пингователь активен (каждые 10 минут)")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
