@@ -85,18 +85,14 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     profile = get_user_profile(user_id)
     
     if not profile:
-        context.user_data['profile_setup'] = {'step': 'goal'}
+        context.user_data['profile_setup'] = {'step': 'current_weight'}
         await update.message.reply_text(
-            "👤 Давай настроим твой профиль!\n\n"
-            "🎯 Какая у тебя цель?\n"
-            "1️⃣ Похудение\n"
-            "2️⃣ Поддержание веса\n"
-            "3️⃣ Набор массы\n\n"
-            "Напиши номер или название:"
+            "👤 **Давай настроим твой профиль!**\n\n"
+            "Шаг 1/7: Какой у тебя текущий вес? (в кг, например: 70)"
         )
         return
     
-    goal_names = {'lose': 'Похудение', 'maintain': 'Поддержание', 'gain': 'Набор массы'}
+    goal_names = {'lose': '📉 Похудение', 'maintain': '📊 Поддержание', 'gain': '📈 Набор массы'}
     activity_names = {
         'sedentary': 'Сидячий (офисная работа)',
         'light': 'Лёгкая (1-2 тренировки в неделю)',
@@ -108,13 +104,13 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         f"📊 **Твой профиль:**\n\n"
         f"🎯 Цель: {goal_names.get(profile['goal'], 'Не указана')}\n"
-        f"⚖️ Вес: {profile['weight']} кг\n"
+        f"⚖️ Текущий вес: {profile['current_weight']} кг\n"
+        f"🎯 Целевой вес: {profile['target_weight']} кг\n"
         f"📏 Рост: {profile['height']} см\n"
         f"🎂 Возраст: {profile['age']} лет\n"
         f"🚻 Пол: {'Мужской' if profile['gender'] == 'male' else 'Женский'}\n"
         f"🏃 Активность: {activity_names.get(profile['activity_level'], 'Не указана')}\n"
-        f"🔥 Дневной лимит: {profile['daily_calorie_limit']} ккал\n"
-        f"🍽 Стандартная порция: {profile.get('default_portion', 1.0)}x\n\n"
+        f"🔥 Дневной лимит: {profile['daily_calorie_limit']} ккал\n\n"
         f"❌ Нелюбимые продукты: {', '.join(profile['disliked_foods']) if profile['disliked_foods'] else 'Нет'}\n"
         f"⚠️ Аллергии: {', '.join(profile['allergies']) if profile['allergies'] else 'Нет'}\n\n"
         f"🔄 Чтобы изменить профиль, используй /setup",
@@ -122,42 +118,49 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=main_keyboard()
     )
 
-async def setup_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    context.user_data['profile_setup'] = {'step': 'goal'}
-    await update.message.reply_text(
-        "🔄 **Настройка профиля**\n\n"
-        "🎯 Какая у тебя цель?\n"
-        "1️⃣ Похудение\n"
-        "2️⃣ Поддержание веса\n"
-        "3️⃣ Набор массы\n\n"
-        "Напиши номер или название:"
-    )
-
 async def process_profile_setup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    text = update.message.text.lower()
+    text = update.message.text
     setup = context.user_data.get('profile_setup', {})
     step = setup.get('step')
     
     profile = get_user_profile(user_id) or {
-        'goal': 'maintain', 'weight': 70, 'height': 170, 'age': 30,
+        'current_weight': 70, 'target_weight': 70, 'height': 170, 'age': 30,
         'gender': 'male', 'activity_level': 'moderate', 'daily_calorie_limit': 2000,
-        'disliked_foods': [], 'allergies': [], 'default_portion': 1.0
+        'disliked_foods': [], 'allergies': []
     }
     
-    if step == 'goal':
-        if text in ['1', 'похудение', 'похудеть']:
-            profile['goal'] = 'lose'
-        elif text in ['2', 'поддержание', 'поддерживать']:
-            profile['goal'] = 'maintain'
-        elif text in ['3', 'набор', 'набрать']:
-            profile['goal'] = 'gain'
-        else:
-            await update.message.reply_text("Не понял. Напиши 1, 2 или 3 (или словами)")
+    if step == 'current_weight':
+        try:
+            profile['current_weight'] = float(text)
+            setup['step'] = 'target_weight'
+            await update.message.reply_text(f"⚖️ Текущий вес: {text} кг\n\nШаг 2/7: Какой вес ты хочешь достичь? (в кг)")
+        except:
+            await update.message.reply_text("Введи число (например: 70)")
             return
-        setup['step'] = 'gender'
-        await update.message.reply_text("🚻 Твой пол?\n1️⃣ Мужской\n2️⃣ Женский")
+    
+    elif step == 'target_weight':
+        try:
+            profile['target_weight'] = float(text)
+            # Определяем цель
+            if profile['target_weight'] > profile['current_weight']:
+                goal = 'gain'
+                goal_text = "📈 Набор массы"
+            elif profile['target_weight'] < profile['current_weight']:
+                goal = 'lose'
+                goal_text = "📉 Похудение"
+            else:
+                goal = 'maintain'
+                goal_text = "📊 Поддержание веса"
+            setup['step'] = 'gender'
+            await update.message.reply_text(
+                f"🎯 Целевой вес: {text} кг\n"
+                f"🎯 Цель: {goal_text}\n\n"
+                f"Шаг 3/7: Твой пол?\n1️⃣ Мужской\n2️⃣ Женский"
+            )
+        except:
+            await update.message.reply_text("Введи число (например: 75)")
+            return
     
     elif step == 'gender':
         if text in ['1', 'мужской', 'муж', 'м']:
@@ -168,24 +171,15 @@ async def process_profile_setup(update: Update, context: ContextTypes.DEFAULT_TY
             await update.message.reply_text("Не понял. Напиши 1 (мужской) или 2 (женский)")
             return
         setup['step'] = 'age'
-        await update.message.reply_text("🎂 Сколько тебе лет?")
+        await update.message.reply_text("Шаг 4/7: Сколько тебе лет?")
     
     elif step == 'age':
         try:
             profile['age'] = int(text)
-            setup['step'] = 'weight'
-            await update.message.reply_text("⚖️ Какой у тебя вес? (в кг, например: 70)")
+            setup['step'] = 'height'
+            await update.message.reply_text("Шаг 5/7: Какой у тебя рост? (в см)")
         except:
             await update.message.reply_text("Введи число (например: 25)")
-            return
-    
-    elif step == 'weight':
-        try:
-            profile['weight'] = float(text)
-            setup['step'] = 'height'
-            await update.message.reply_text("📏 Какой у тебя рост? (в см, например: 170)")
-        except:
-            await update.message.reply_text("Введи число (например: 70.5)")
             return
     
     elif step == 'height':
@@ -193,7 +187,7 @@ async def process_profile_setup(update: Update, context: ContextTypes.DEFAULT_TY
             profile['height'] = float(text)
             setup['step'] = 'activity'
             await update.message.reply_text(
-                "🏃 Твоя физическая активность?\n\n"
+                "🏃 Шаг 6/7: Твоя физическая активность?\n\n"
                 "1️⃣ Сидячий (офис, мало движения)\n"
                 "2️⃣ Лёгкая (1-2 тренировки в неделю)\n"
                 "3️⃣ Умеренная (3-4 тренировки)\n"
@@ -209,44 +203,33 @@ async def process_profile_setup(update: Update, context: ContextTypes.DEFAULT_TY
         activity_map = {'1': 'sedentary', '2': 'light', '3': 'moderate', '4': 'active', '5': 'very_active'}
         if text in activity_map:
             profile['activity_level'] = activity_map[text]
+            
+            # Определяем цель для расчёта калорий
+            if profile['target_weight'] > profile['current_weight']:
+                goal = 'gain'
+            elif profile['target_weight'] < profile['current_weight']:
+                goal = 'lose'
+            else:
+                goal = 'maintain'
+            
             profile['daily_calorie_limit'] = calculate_daily_calories(
-                profile['weight'], profile['height'], profile['age'],
-                profile['gender'], profile['activity_level'], profile['goal']
+                profile['current_weight'], profile['height'], profile['age'],
+                profile['gender'], profile['activity_level'], goal
             )
-            setup['step'] = 'portion'
+            
+            setup['step'] = 'disliked'
             await update.message.reply_text(
                 f"🔥 Рекомендуемая дневная норма: {profile['daily_calorie_limit']} ккал\n\n"
-                f"🍽 Какая у тебя стандартная порция?\n"
-                f"0.5x — половинная\n"
-                f"1x — стандартная\n"
-                f"1.5x — увеличенная\n"
-                f"2x — двойная\n\n"
-                f"Напиши число (0.5, 1, 1.5 или 2):"
+                f"Шаг 7/7: Есть ли у тебя нелюбимые продукты?\n"
+                f"Напиши через запятую (например: печень, грибы)\n"
+                f"Или напиши «нет»:"
             )
         else:
             await update.message.reply_text("Введи номер от 1 до 5")
             return
     
-    elif step == 'portion':
-        try:
-            portion = float(text)
-            if portion in [0.5, 1.0, 1.5, 2.0]:
-                profile['default_portion'] = portion
-                setup['step'] = 'disliked'
-                await update.message.reply_text(
-                    f"🍽 Стандартная порция: {portion}x\n\n"
-                    f"❌ Есть ли у тебя нелюбимые продукты?\n"
-                    f"Напиши через запятую (например: печень, грибы)\n"
-                    f"Или напиши «нет»:"
-                )
-            else:
-                await update.message.reply_text("Введи 0.5, 1, 1.5 или 2")
-        except:
-            await update.message.reply_text("Введи число (0.5, 1, 1.5 или 2)")
-            return
-    
     elif step == 'disliked':
-        if text != 'нет':
+        if text.lower() != 'нет':
             profile['disliked_foods'] = [x.strip() for x in text.split(',')]
         setup['step'] = 'allergies'
         await update.message.reply_text(
@@ -256,21 +239,28 @@ async def process_profile_setup(update: Update, context: ContextTypes.DEFAULT_TY
         )
     
     elif step == 'allergies':
-        if text != 'нет':
+        if text.lower() != 'нет':
             profile['allergies'] = [x.strip() for x in text.split(',')]
         
         save_user_profile(user_id, profile)
         del context.user_data['profile_setup']
         
+        goal_names = {'lose': 'похудение', 'maintain': 'поддержание', 'gain': 'набор массы'}
+        if profile['target_weight'] > profile['current_weight']:
+            goal_text = 'набор массы'
+        elif profile['target_weight'] < profile['current_weight']:
+            goal_text = 'похудение'
+        else:
+            goal_text = 'поддержание веса'
+        
         await update.message.reply_text(
             f"✅ **Профиль сохранён!**\n\n"
-            f"🎯 Цель: {profile['goal']}\n"
-            f"⚖️ Вес: {profile['weight']} кг\n"
+            f"🎯 Цель: {goal_text}\n"
+            f"⚖️ Текущий вес: {profile['current_weight']} кг → {profile['target_weight']} кг\n"
             f"🔥 Дневной лимит: {profile['daily_calorie_limit']} ккал\n"
-            f"🍽 Стандартная порция: {profile['default_portion']}x\n"
             f"❌ Нелюбимые: {', '.join(profile['disliked_foods']) if profile['disliked_foods'] else 'Нет'}\n"
             f"⚠️ Аллергии: {', '.join(profile['allergies']) if profile['allergies'] else 'Нет'}\n\n"
-            f"Теперь бот будет подбирать рецепты с учётом твоих предпочтений! 🧠",
+            f"Теперь бот будет подбирать рецепты с учётом твоей цели! 🧠",
             parse_mode="Markdown",
             reply_markup=main_keyboard()
         )
@@ -983,7 +973,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await profile_command(update, context)
     elif text == "🔙 Назад":
         await update.message.reply_text("Главное меню", reply_markup=main_keyboard())
-    elif text == "❓ Помощь":
+    elif text == "❓ Помощь":D
         await help_command(update, context)
     else:
         await update.message.reply_text("Используй кнопки внизу 👇", reply_markup=main_keyboard())

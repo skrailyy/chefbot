@@ -2,7 +2,7 @@ import os
 import sqlite3
 import datetime
 
-# Принудительное удаление старой БД
+# Принудительное удаление старой БД (временно)
 db_path = 'recipes.db'
 if os.path.exists(db_path):
     try:
@@ -33,20 +33,19 @@ CREATE TABLE IF NOT EXISTS recipes (
 )
 ''')
 
-# ========== ТАБЛИЦА ПРОФИЛЕЙ ==========
+# ========== ТАБЛИЦА ПРОФИЛЕЙ (упрощённая) ==========
 cursor.execute('''
 CREATE TABLE IF NOT EXISTS user_profiles (
     user_id INTEGER PRIMARY KEY,
-    goal TEXT DEFAULT 'maintain',
-    weight REAL DEFAULT 70,
+    current_weight REAL DEFAULT 70,
+    target_weight REAL DEFAULT 70,
     height REAL DEFAULT 170,
     age INTEGER DEFAULT 30,
     gender TEXT DEFAULT 'male',
     activity_level TEXT DEFAULT 'moderate',
     daily_calorie_limit INTEGER DEFAULT 2000,
     disliked_foods TEXT DEFAULT '',
-    allergies TEXT DEFAULT '',
-    default_portion REAL DEFAULT 1.0
+    allergies TEXT DEFAULT ''
 )
 ''')
 
@@ -172,32 +171,6 @@ DEFAULT_RECIPES = [
      "протеин 1 ложка, банан 1шт, молоко 200мл, овсянка 30г, арахисовая паста 1ст.л",
      "Смешайте все ингредиенты в блендере. Взбивайте 30 секунд.",
      5, 450, 35, 18, 40, "спортивное", "спорт,протеин,напиток"),
-
-         # === БЛИНЧИКИ И ПАНКЕЙКИ ===
-    (0, "Блинчики классические", "завтрак",
-     "молоко 500мл, яйца 2шт, мука 200г, сахар 2ст.л, соль, масло растительное 2ст.л",
-     "1. Смешайте яйца с сахаром и солью. 2. Добавьте молоко и муку, перемешайте до однородности. 3. Влейте растительное масло. 4. Жарьте на разогретой сковороде с двух сторон до золотистого цвета.",
-     30, 350, 10, 12, 48, "обычное", "завтрак,блины,быстро"),
-    
-    (0, "Панкейки пышные", "завтрак",
-     "мука 200г, молоко 200мл, яйцо 1шт, сахар 2ст.л, разрыхлитель 1ч.л, масло сливочное 30г",
-     "1. Отделите белок от желтка. 2. Желток разотрите с сахаром, добавьте молоко и растопленное масло. 3. Добавьте муку с разрыхлителем. 4. Белок взбейте в пену, аккуратно вмешайте в тесто. 5. Жарьте на сухой сковороде до пузырьков, затем переверните.",
-     25, 380, 8, 14, 55, "обычное", "завтрак,панкейки,пышные"),
-    
-    (0, "Блинчики на кефире", "завтрак",
-     "кефир 500мл, яйца 2шт, мука 250г, сахар 2ст.л, сода 0.5ч.л, соль, масло",
-     "1. Взбейте яйца с сахаром и солью. 2. Добавьте кефир и муку, перемешайте. 3. Добавьте соду, перемешайте. 4. Жарьте на разогретой сковороде с двух сторон.",
-     25, 330, 9, 11, 46, "обычное", "завтрак,блины,кефирные"),
-    
-    (0, "Блинчики с творогом", "завтрак",
-     "блины 8шт, творог 300г, сахар 2ст.л, ванилин, сметана 2ст.л",
-     "1. Смешайте творог с сахаром, ванилином и сметаной. 2. Заверните начинку в блины конвертом. 3. Обжарьте на сковороде до золотистой корочки.",
-     20, 420, 18, 16, 50, "обычное", "завтрак,блины,сладкие"),
-    
-    (0, "Банановые панкейки", "завтрак",
-     "банан 2шт, яйца 2шт, овсяная мука 100г, разрыхлитель 0.5ч.л, корица",
-     "1. Разомните бананы вилкой. 2. Добавьте яйца, муку, разрыхлитель и корицу. 3. Перемешайте. 4. Жарьте на сухой сковороде с двух сторон.",
-     15, 320, 8, 10, 50, "диетическое", "завтрак,панкейки,банановые,пп"),
 ]
 
 def init_default_recipes():
@@ -249,58 +222,48 @@ def adjust_by_portion(recipe, portion):
     carbs = round(recipe[10] * portion, 1)
     return {'calories': calories, 'protein': protein, 'fat': fat, 'carbs': carbs}
 
-def get_recipe_with_portion(recipe, portion=1.0):
-    """Возвращает рецепт с учётом порции"""
-    adj = adjust_by_portion(recipe, portion)
-    return {
-        'id': recipe[0],
-        'user_id': recipe[1],
-        'name': recipe[2],
-        'category': recipe[3],
-        'ingredients': recipe[4],
-        'instructions': recipe[5],
-        'cook_time': recipe[6],
-        'calories': adj['calories'],
-        'protein': adj['protein'],
-        'fat': adj['fat'],
-        'carbs': adj['carbs'],
-        'recipe_type': recipe[11],
-        'tags': recipe[12],
-        'portion': portion
-    }
-
 def get_user_profile(user_id):
     cursor.execute('SELECT * FROM user_profiles WHERE user_id = ?', (user_id,))
     row = cursor.fetchone()
     if row:
+        # Определяем цель на основе текущего и целевого веса
+        current = row[1]
+        target = row[2]
+        if target > current:
+            goal = 'gain'
+        elif target < current:
+            goal = 'lose'
+        else:
+            goal = 'maintain'
         return {
-            'goal': row[1],
-            'weight': row[2],
+            'goal': goal,
+            'current_weight': current,
+            'target_weight': target,
             'height': row[3],
             'age': row[4],
             'gender': row[5],
             'activity_level': row[6],
             'daily_calorie_limit': row[7],
             'disliked_foods': [x for x in row[8].split(',') if x] if row[8] else [],
-            'allergies': [x for x in row[9].split(',') if x] if row[9] else [],
-            'default_portion': row[10] if len(row) > 10 else 1.0
+            'allergies': [x for x in row[9].split(',') if x] if row[9] else []
         }
     return None
 
 def save_user_profile(user_id, profile):
     cursor.execute('''
     INSERT OR REPLACE INTO user_profiles 
-    (user_id, goal, weight, height, age, gender, activity_level, daily_calorie_limit, disliked_foods, allergies, default_portion)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    (user_id, current_weight, target_weight, height, age, gender, activity_level, daily_calorie_limit, disliked_foods, allergies)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (
-        user_id, profile['goal'], profile['weight'], profile['height'],
+        user_id, profile['current_weight'], profile['target_weight'], profile['height'],
         profile['age'], profile['gender'], profile['activity_level'],
         profile['daily_calorie_limit'], ','.join(profile['disliked_foods']),
-        ','.join(profile['allergies']), profile.get('default_portion', 1.0)
+        ','.join(profile['allergies'])
     ))
     conn.commit()
 
 def calculate_daily_calories(weight, height, age, gender, activity_level, goal):
+    # Базовый расчёт BMR
     if gender == 'male':
         bmr = 88.36 + (13.4 * weight) + (4.8 * height) - (5.7 * age)
     else:
@@ -315,8 +278,9 @@ def calculate_daily_calories(weight, height, age, gender, activity_level, goal):
     }
     tdee = bmr * activity_factors.get(activity_level, 1.55)
     
+    # Корректировка под цель
     if goal == 'lose':
-        return max(1200, int(tdee - 500))
+        return max(1500, int(tdee - 500))
     elif goal == 'gain':
         return int(tdee + 500)
     else:
