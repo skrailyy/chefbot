@@ -118,6 +118,14 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=main_keyboard()
     )
 
+async def setup_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    context.user_data['profile_setup'] = {'step': 'current_weight'}
+    await update.message.reply_text(
+        "🔄 **Настройка профиля**\n\n"
+        "Шаг 1/7: Какой у тебя текущий вес? (в кг, например: 70)"
+    )
+
 async def process_profile_setup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text
@@ -142,7 +150,6 @@ async def process_profile_setup(update: Update, context: ContextTypes.DEFAULT_TY
     elif step == 'target_weight':
         try:
             profile['target_weight'] = float(text)
-            # Определяем цель
             if profile['target_weight'] > profile['current_weight']:
                 goal = 'gain'
                 goal_text = "📈 Набор массы"
@@ -204,7 +211,6 @@ async def process_profile_setup(update: Update, context: ContextTypes.DEFAULT_TY
         if text in activity_map:
             profile['activity_level'] = activity_map[text]
             
-            # Определяем цель для расчёта калорий
             if profile['target_weight'] > profile['current_weight']:
                 goal = 'gain'
             elif profile['target_weight'] < profile['current_weight']:
@@ -245,7 +251,6 @@ async def process_profile_setup(update: Update, context: ContextTypes.DEFAULT_TY
         save_user_profile(user_id, profile)
         del context.user_data['profile_setup']
         
-        goal_names = {'lose': 'похудение', 'maintain': 'поддержание', 'gain': 'набор массы'}
         if profile['target_weight'] > profile['current_weight']:
             goal_text = 'набор массы'
         elif profile['target_weight'] < profile['current_weight']:
