@@ -1,6 +1,17 @@
 import os
 import logging
 import random
+
+# ========== ПРИНУДИТЕЛЬНОЕ УДАЛЕНИЕ СТАРОЙ БД (ОДИН РАЗ) ==========
+# После успешного запуска ЭТИ 6 СТРОК МОЖНО УДАЛИТЬ
+db_path = 'recipes.db'
+if os.path.exists(db_path):
+    try:
+        os.remove(db_path)
+        print(f"✅ Удалена старая БД: {db_path}")
+    except Exception as e:
+        print(f"⚠️ Не удалось удалить: {e}")
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 from starlette.applications import Starlette
@@ -417,12 +428,6 @@ async def shopping_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(response, parse_mode="Markdown")
 
-# ========== ДОБАВЛЕНИЕ В ДНЕВНИК ==========
-async def add_to_diary(update: Update, context: ContextTypes.DEFAULT_TYPE, recipe, meal_type):
-    user_id = update.effective_user.id
-    add_meal(user_id, meal_type, recipe[0], recipe[7], recipe[8], recipe[9], recipe[10])
-    await update.callback_query.answer(f"✅ {recipe[2]} добавлен в дневник!")
-
 # ========== ПОИСК РЕЦЕПТА ==========
 async def find_recipe_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🔍 Напиши название блюда:")
@@ -612,7 +617,7 @@ async def process_fridge(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def add_recipe_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user_states[user_id] = {"step": "name"}
-    await update.message.reply_text("📝 **Добавление рецепта**\n\nШаг 1/8: Напиши название блюда")
+    await update.message.reply_text("📝 **Добавление рецепта**\n\nШаг 1/11: Напиши название блюда")
 
 async def add_recipe_process(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -623,24 +628,24 @@ async def add_recipe_process(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if step == "name":
         state["name"] = text
         state["step"] = "category"
-        await update.message.reply_text("Шаг 2/8: Категория (завтрак, обед, ужин, салат, десерт, спорт)")
+        await update.message.reply_text("Шаг 2/11: Категория (завтрак, обед, ужин, салат, десерт, спорт)")
     elif step == "category":
         state["category"] = text.lower()
         state["step"] = "ingredients"
-        await update.message.reply_text("Шаг 3/8: Ингредиенты через запятую")
+        await update.message.reply_text("Шаг 3/11: Ингредиенты через запятую")
     elif step == "ingredients":
         state["ingredients"] = text
         state["step"] = "instructions"
-        await update.message.reply_text("Шаг 4/8: Инструкция приготовления")
+        await update.message.reply_text("Шаг 4/11: Инструкция приготовления")
     elif step == "instructions":
         state["instructions"] = text
         state["step"] = "time"
-        await update.message.reply_text("Шаг 5/8: Время в минутах")
+        await update.message.reply_text("Шаг 5/11: Время в минутах")
     elif step == "time":
         try:
             state["cook_time"] = int(text)
             state["step"] = "calories"
-            await update.message.reply_text("Шаг 6/8: Калории (или 0)")
+            await update.message.reply_text("Шаг 6/11: Калории (или 0)")
         except:
             await update.message.reply_text("❌ Введи число")
     elif step == "calories":
@@ -831,7 +836,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     [InlineKeyboardButton("☀️ Завтрак", callback_data=f"meal_{recipe_id}_breakfast")],
                     [InlineKeyboardButton("🌤️ Обед", callback_data=f"meal_{recipe_id}_lunch")],
                     [InlineKeyboardButton("🌙 Ужин", callback_data=f"meal_{recipe_id}_dinner")],
-                    [KeyboardButton("🍎 Перекус", callback_data=f"meal_{recipe_id}_snack")]
+                    [InlineKeyboardButton("🍎 Перекус", callback_data=f"meal_{recipe_id}_snack")]
                 ])
                 await query.edit_message_reply_markup(reply_markup=keyboard)
                 break
