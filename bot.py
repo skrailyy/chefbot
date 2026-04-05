@@ -150,21 +150,21 @@ profile = {
 }
     
     # ШАГ 1: Текущий вес
-    if step == 'current_weight':
-        try:
+if step == 'current_weight':
+    try:
             profile['current_weight'] = float(text)
             setup['step'] = 'target_weight'
             await update.message.reply_text(
                 f"✅ Текущий вес: {text} кг\n\n"
                 f"Шаг 2/7: Какой вес ты хочешь достичь? (в кг)"
             )
-        except:
+    except:
             await update.message.reply_text("❌ Введи число, например: 70")
-        return
+    return
     
     # ШАГ 2: Целевой вес
-    elif step == 'target_weight':
-        try:
+elif step == 'target_weight':
+    try:
             target = float(text)
             profile['target_weight'] = target
             setup['step'] = 'gender'
@@ -172,9 +172,9 @@ profile = {
                 f"✅ Целевой вес: {target} кг\n\n"
                 f"Шаг 3/7: Твой пол?\n1️⃣ Мужской\n2️⃣ Женский"
             )
-        except:
+    except:
             await update.message.reply_text("❌ Введи число, например: 75")
-        return
+    return
     
     # ШАГ 3: Пол
     elif step == 'gender':
