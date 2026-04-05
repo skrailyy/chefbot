@@ -10,7 +10,7 @@ if os.path.exists('recipes.db'):
 conn = sqlite3.connect('recipes.db')
 cursor = conn.cursor()
 
-# ТАБЛИЦА РЕЦЕПТОВ
+# ========== ТАБЛИЦА РЕЦЕПТОВ ==========
 cursor.execute('''
 CREATE TABLE IF NOT EXISTS recipes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS recipes (
 )
 ''')
 
-# ТАБЛИЦА ПРОФИЛЕЙ
+# ========== ТАБЛИЦА ПРОФИЛЕЙ ==========
 cursor.execute('''
 CREATE TABLE IF NOT EXISTS user_profiles (
     user_id INTEGER PRIMARY KEY,
@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS user_profiles (
 )
 ''')
 
-# ТАБЛИЦА ДНЕВНОГО ПИТАНИЯ
+# ========== ТАБЛИЦА ДНЕВНОГО ПИТАНИЯ ==========
 cursor.execute('''
 CREATE TABLE IF NOT EXISTS daily_meals (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -63,6 +63,44 @@ CREATE TABLE IF NOT EXISTS daily_meals (
 
 conn.commit()
 
+# ========== ФУНКЦИИ ДЛЯ РЕЦЕПТОВ ==========
+def add_recipe(user_id, name, category, ingredients, instructions, cook_time, calories=0, protein=0, fat=0, carbs=0, recipe_type="обычное", tags=""):
+    cursor.execute('''
+    INSERT INTO recipes (user_id, name, category, ingredients, instructions, cook_time, calories_1x, protein_1x, fat_1x, carbs_1x, recipe_type, tags)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (user_id, name, category, ingredients, instructions, cook_time, calories, protein, fat, carbs, recipe_type, tags))
+    conn.commit()
+    return cursor.lastrowid
+
+def get_recipes(user_id):
+    cursor.execute('SELECT * FROM recipes WHERE user_id = ? OR user_id = 0 ORDER BY user_id DESC, id', (user_id,))
+    return cursor.fetchall()
+
+def find_recipe_by_name(user_id, name):
+    cursor.execute('SELECT * FROM recipes WHERE (user_id = ? OR user_id = 0) AND name LIKE ?', (user_id, f'%{name}%'))
+    return cursor.fetchall()
+
+def get_recipes_by_category(user_id, category):
+    cursor.execute('SELECT * FROM recipes WHERE (user_id = ? OR user_id = 0) AND category = ?', (user_id, category))
+    return cursor.fetchall()
+
+def get_recipes_by_type(user_id, recipe_type):
+    cursor.execute('SELECT * FROM recipes WHERE (user_id = ? OR user_id = 0) AND recipe_type = ?', (user_id, recipe_type))
+    return cursor.fetchall()
+
+def delete_recipe(recipe_id, user_id):
+    cursor.execute('DELETE FROM recipes WHERE id = ? AND user_id = ?', (recipe_id, user_id))
+    conn.commit()
+    return cursor.rowcount > 0
+
+def adjust_by_portion(recipe, portion):
+    calories = int(recipe[7] * portion)
+    protein = round(recipe[8] * portion, 1)
+    fat = round(recipe[9] * portion, 1)
+    carbs = round(recipe[10] * portion, 1)
+    return {'calories': calories, 'protein': protein, 'fat': fat, 'carbs': carbs}
+
+# ========== ФУНКЦИИ ДЛЯ ПРОФИЛЯ ==========
 def get_user_profile(user_id):
     cursor.execute('SELECT * FROM user_profiles WHERE user_id = ?', (user_id,))
     row = cursor.fetchone()
@@ -95,15 +133,9 @@ def save_user_profile(user_id, profile):
     (user_id, current_weight, target_weight, height, age, gender, activity_level, daily_calorie_limit, disliked_foods, allergies)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (
-        user_id, 
-        profile['current_weight'], 
-        profile['target_weight'], 
-        profile['height'],
-        profile['age'], 
-        profile['gender'], 
-        profile['activity_level'],
-        profile['daily_calorie_limit'], 
-        ','.join(profile['disliked_foods']),
+        user_id, profile['current_weight'], profile['target_weight'], profile['height'],
+        profile['age'], profile['gender'], profile['activity_level'],
+        profile['daily_calorie_limit'], ','.join(profile['disliked_foods']),
         ','.join(profile['allergies'])
     ))
     conn.commit()
@@ -130,4 +162,28 @@ def calculate_daily_calories(weight, height, age, gender, activity_level, goal):
     else:
         return int(tdee)
 
-# ОСТАЛЬНЫЕ ФУНКЦИИ (add_recipe, get_recipes и т.д.) ОСТАВЬ КАК БЫЛИ
+# ========== ФУНКЦИИ ДЛЯ ДНЕВНИКА ПИТАНИЯ ==========
+def get_today_calories(user_id):
+    today = datetime.date.today().isoformat()
+    cursor.execute('SELECT SUM(calories) FROM daily_meals WHERE user_id = ? AND date = ?', (user_id, today))
+    result = cursor.fetchone()[0]
+    return result or 0
+
+def get_today_macros(user_id):
+    today = datetime.date.today().isoformat()
+    cursor.execute('SELECT SUM(protein), SUM(fat), SUM(carbs) FROM daily_meals WHERE user_id = ? AND date = ?', (user_id, today))
+    result = cursor.fetchone()
+    return {'protein': result[0] or 0, 'fat': result[1] or 0, 'carbs': result[2] or 0}
+
+def add_meal(user_id, meal_type, recipe_id, portion, calories, protein, fat, carbs):
+    today = datetime.date.today().isoformat()
+    cursor.execute('''
+    INSERT INTO daily_meals (user_id, date, meal_type, recipe_id, portion, calories, protein, fat, carbs)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (user_id, today, meal_type, recipe_id, portion, calories, protein, fat, carbs))
+    conn.commit()
+
+def clear_today_meals(user_id):
+    today = datetime.date.today().isoformat()
+    cursor.execute('DELETE FROM daily_meals WHERE user_id = ? AND date = ?', (user_id, today))
+    conn.commit()
