@@ -148,26 +148,28 @@ async def process_profile_setup(update: Update, context: ContextTypes.DEFAULT_TY
             return
     
     elif step == 'target_weight':
-        try:
-            profile['target_weight'] = float(text)
-            if profile['target_weight'] > profile['current_weight']:
-                goal = 'gain'
-                goal_text = "📈 Набор массы"
-            elif profile['target_weight'] < profile['current_weight']:
-                goal = 'lose'
-                goal_text = "📉 Похудение"
-            else:
-                goal = 'maintain'
-                goal_text = "📊 Поддержание веса"
-            setup['step'] = 'gender'
-            await update.message.reply_text(
-                f"🎯 Целевой вес: {text} кг\n"
-                f"🎯 Цель: {goal_text}\n\n"
-                f"Шаг 3/7: Твой пол?\n1️⃣ Мужской\n2️⃣ Женский"
-            )
-        except:
-            await update.message.reply_text("Введи число (например: 75)")
-            return
+    try:
+        profile['target_weight'] = float(text)
+        if profile['target_weight'] > profile['current_weight']:
+            goal = 'gain'
+            goal_text = "Набор массы"
+        elif profile['target_weight'] < profile['current_weight']:
+            goal = 'lose'
+            goal_text = "Похудение"
+        else:
+            goal = 'maintain'
+            goal_text = "Поддержание веса"
+        
+        setup['step'] = 'gender'
+        
+        await update.message.reply_text(
+            f"🎯 Целевой вес: {text} кг\n"
+            f"🎯 Цель: {goal_text}\n\n"
+            f"Шаг 3/7: Твой пол?\n1️⃣ Мужской\n2️⃣ Женский"
+        )
+    except:
+        await update.message.reply_text("Введи число (например: 75)")
+        return
     
     elif step == 'gender':
         if text in ['1', 'мужской', 'муж', 'м']:
@@ -207,21 +209,32 @@ async def process_profile_setup(update: Update, context: ContextTypes.DEFAULT_TY
             return
     
     elif step == 'activity':
-        activity_map = {'1': 'sedentary', '2': 'light', '3': 'moderate', '4': 'active', '5': 'very_active'}
-        if text in activity_map:
-            profile['activity_level'] = activity_map[text]
-            
-            if profile['target_weight'] > profile['current_weight']:
-                goal = 'gain'
-            elif profile['target_weight'] < profile['current_weight']:
-                goal = 'lose'
-            else:
-                goal = 'maintain'
-            
-            profile['daily_calorie_limit'] = calculate_daily_calories(
-                profile['current_weight'], profile['height'], profile['age'],
-                profile['gender'], profile['activity_level'], goal
-            )
+    activity_map = {'1': 'sedentary', '2': 'light', '3': 'moderate', '4': 'active', '5': 'very_active'}
+    if text in activity_map:
+        profile['activity_level'] = activity_map[text]
+        
+        if profile['target_weight'] > profile['current_weight']:
+            goal = 'gain'
+        elif profile['target_weight'] < profile['current_weight']:
+            goal = 'lose'
+        else:
+            goal = 'maintain'
+        
+        profile['daily_calorie_limit'] = calculate_daily_calories(
+            profile['current_weight'], profile['height'], profile['age'],
+            profile['gender'], profile['activity_level'], goal
+        )
+        
+        setup['step'] = 'disliked'
+        await update.message.reply_text(
+            f"🔥 Рекомендуемая дневная норма: {profile['daily_calorie_limit']} ккал\n\n"
+            f"Шаг 7/7: Есть ли у тебя нелюбимые продукты?\n"
+            f"Напиши через запятую (например: печень, грибы)\n"
+            f"Или напиши «нет»:"
+        )
+    else:
+        await update.message.reply_text("Введи номер от 1 до 5")
+        return
             
             setup['step'] = 'disliked'
             await update.message.reply_text(
