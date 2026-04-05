@@ -2,14 +2,14 @@ import os
 import sqlite3
 import datetime
 
-# ПРИНУДИТЕЛЬНОЕ УДАЛЕНИЕ СТАРОЙ БД
+# Принудительное удаление старой БД
 db_path = 'recipes.db'
 if os.path.exists(db_path):
     try:
         os.remove(db_path)
-        print("✅ Старая БД удалена")
+        print("Старая БД удалена")
     except Exception as e:
-        print(f"⚠️ Ошибка удаления: {e}")
+        print(f"Ошибка удаления: {e}")
 
 conn = sqlite3.connect('recipes.db')
 cursor = conn.cursor()
