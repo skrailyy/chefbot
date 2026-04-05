@@ -306,7 +306,6 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
-# ========== УМНОЕ МЕНЮ ==========
 async def smart_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     profile = get_user_profile(user_id)
@@ -351,57 +350,102 @@ async def smart_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Считаем калории с учётом стандартной порции
         calories_with_portion = int(r[7] * default_portion)
-        if calories_with_portion <= remaining:
-            filtered.append(r)
+        filtered.append((r, calories_with_portion))
     
     if not filtered:
         await update.message.reply_text(
-            f"❌ Нет рецептов, подходящих под твои ограничения и остаток калорий ({remaining} ккал).\n\n"
-            f"💡 **Советы:**\n"
-            f"• Уменьши порцию (настрой в профиле)\n"
-            f"• Добавь новые рецепты через «Добавить рецепт»\n"
-            f"• Измени профиль через /profile\n\n"
-            f"🔥 Твой остаток: {remaining} ккал",
-            parse_mode="Markdown"
+            f"❌ Нет рецептов, подходящих под твои ограничения.\n\n"
+            f"💡 Попробуй добавить новые рецепты через «Добавить рецепт»"
         )
         return
     
     # Группируем по категориям
-    breakfasts = [r for r in filtered if r[3].lower() == "завтрак"]
-    lunches = [r for r in filtered if r[3].lower() == "обед"]
-    dinners = [r for r in filtered if r[3].lower() == "ужин"]
+    breakfasts = [(r, c) for r, c in filtered if r[3].lower() == "завтрак"]
+    lunches = [(r, c) for r, c in filtered if r[3].lower() == "обед"]
+    dinners = [(r, c) for r, c in filtered if r[3].lower() == "ужин"]
     
-    selected = {}
-    if breakfasts:
-        selected['завтрак'] = random.choice(breakfasts)
-    if lunches:
-        selected['обед'] = random.choice(lunches)
-    if dinners:
-        selected['ужин'] = random.choice(dinners)
-    
-    if not selected:
-        await update.message.reply_text("❌ Нет подходящих рецептов. Попробуй добавить новые рецепты!")
+    # Проверяем наличие рецептов в каждой категории
+    if not breakfasts or not lunches or not dinners:
+        missing = []
+        if not breakfasts:
+            missing.append("завтрак")
+        if not lunches:
+            missing.append("обед")
+        if not dinners:
+            missing.append("ужин")
+        await update.message.reply_text(
+            f"❌ Нет рецептов в категориях: {', '.join(missing)}\n\n"
+            f"📝 Добавь рецепты через «Добавить рецепт»"
+        )
         return
     
-    response = "🧠 **Умное меню с учётом твоего профиля:**\n\n"
-    total = 0
+    # Выбираем случайные рецепты
+    selected = {
+        "завтрак": random.choice(breakfasts),
+        "обед": random.choice(lunches),
+        "ужин": random.choice(dinners)
+    }
     
-    for meal_type, recipe in selected.items():
-        adj = adjust_by_portion(recipe, default_portion)
-        response += f"🍽 **{meal_type.capitalize()}:** {recipe[2]}\n"
-        response += f"   ⏰ {recipe[6]} мин | 🔥 {adj['calories']} ккал\n"
-        response += f"   🥩 {adj['protein']}г б | 🧈 {adj['fat']}г ж | 🍚 {adj['carbs']}г у\n"
-        response += f"   🍽 Порция: {default_portion}x\n\n"
-        total += adj['calories']
+    # Считаем общую калорийность с учётом стандартной порции
+    total_calories = sum(item[1] for item in selected.values())
     
-    response += f"📊 **Итого:** {total} ккал"
-    response += f"\n💪 **Останется:** {remaining - total} ккал\n\n"
-    response += f"✅ Чтобы добавить эти блюда в дневник, нажми «📝 Добавить в дневник» под каждым рецептом"
-    
-    await update.message.reply_text(response, parse_mode="Markdown")
-    
-    # Сохраняем выбранные рецепты в корзину
-    user_cart[user_id] = [(r, default_portion) for r in selected.values()]
+    # ========== УМНОЕ МАСШТАБИРОВАНИЕ ПОРЦИЙ ==========
+    if total_calories < remaining:
+        # Нужно увеличить порции
+        target = min(remaining, profile['daily_calorie_limit'])
+        scale = target / total_calories
+        
+        # Ограничиваем масштаб разумными пределами (0.7x - 2.5x)
+        scale = max(0.7, min(2.5, scale))
+        
+        # Округляем до 0.1
+        scale = round(scale, 1)
+        
+        # Применяем масштаб ко всем блюдам
+        scaled_recipes = {}
+        for meal_type, (recipe, base_cal) in selected.items():
+            new_portion = round(default_portion * scale, 1)
+            adj = adjust_by_portion(recipe, new_portion)
+            scaled_recipes[meal_type] = (recipe, adj, new_portion)
+        
+        response = "🧠 **Умное меню с автоматической корректировкой порций:**\n\n"
+        total = 0
+        for meal_type, (recipe, adj, portion) in scaled_recipes.items():
+            response += f"🍽 **{meal_type.capitalize()}:** {recipe[2]}\n"
+            response += f"   ⏰ {recipe[6]} мин | 🔥 {adj['calories']} ккал\n"
+            response += f"   🥩 {adj['protein']}г б | 🧈 {adj['fat']}г ж | 🍚 {adj['carbs']}г у\n"
+            response += f"   🍽 Порция увеличена: {portion}x (было 1x)\n\n"
+            total += adj['calories']
+        
+        response += f"📊 **Итого:** {total} ккал"
+        response += f"\n🎯 **Цель:** {profile['daily_calorie_limit']} ккал"
+        response += f"\n💪 **Осталось:** {remaining - total} ккал"
+        
+        if scale > 1.5:
+            response += f"\n\n⚠️ Порции увеличены значительно ({scale}x). Для более точного попадания в норму добавь больше рецептов с разной калорийностью."
+        
+        await update.message.reply_text(response, parse_mode="Markdown")
+        
+        # Сохраняем в корзину
+        user_cart[user_id] = [(recipe, portion) for meal_type, (recipe, adj, portion) in scaled_recipes.items()]
+        
+    else:
+        # Всё в пределах нормы, оставляем как есть
+        response = "🧠 **Умное меню с учётом твоего профиля:**\n\n"
+        total = 0
+        for meal_type, (recipe, base_cal) in selected.items():
+            adj = adjust_by_portion(recipe, default_portion)
+            response += f"🍽 **{meal_type.capitalize()}:** {recipe[2]}\n"
+            response += f"   ⏰ {recipe[6]} мин | 🔥 {adj['calories']} ккал\n"
+            response += f"   🥩 {adj['protein']}г б | 🧈 {adj['fat']}г ж | 🍚 {adj['carbs']}г у\n\n"
+            total += adj['calories']
+        
+        response += f"📊 **Итого:** {total} ккал"
+        response += f"\n🎯 **Цель:** {profile['daily_calorie_limit']} ккал"
+        response += f"\n💪 **Осталось:** {remaining - total} ккал"
+        
+        await update.message.reply_text(response, parse_mode="Markdown")
+        user_cart[user_id] = [(recipe, default_portion) for meal_type, (recipe, base_cal) in selected.items()]
 
 # ========== МЕНЮ НА НЕДЕЛЮ ==========
 async def weekly_menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
