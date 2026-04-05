@@ -352,3 +352,8 @@ def get_weekly_menu(user_id, week_start):
             menu[day] = {}
         menu[day][meal_type] = {'id': row[2], 'portion': row[3]}
     return menu
+def force_reset_db():
+    import os
+    if os.path.exists('recipes.db'):
+        os.remove('recipes.db')
+        print("✅ БД ПРИНУДИТЕЛЬНО УДАЛЕНА")

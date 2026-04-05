@@ -130,6 +130,9 @@ async def process_profile_setup(update: Update, context: ContextTypes.DEFAULT_TY
     text = update.message.text
     setup = context.user_data.get('profile_setup', {})
     step = setup.get('step')
+
+        from database import force_reset_db
+    force_reset_db()
     
     # Загружаем текущий профиль или создаём новый
     profile = get_user_profile(user_id)
