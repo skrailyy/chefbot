@@ -1,4 +1,9 @@
 import os
+
+# ПРИНУДИТЕЛЬНОЕ УДАЛЕНИЕ БД ПРИ ЗАПУСКЕ
+if os.path.exists('recipes.db'):
+    os.remove('recipes.db')
+    print("✅ БД УДАЛЕНА - СОЗДАЁТСЯ НОВАЯ")
 import sqlite3
 import datetime
 
@@ -339,7 +344,17 @@ def save_weekly_menu(user_id, week_start, menu):
             INSERT INTO weekly_menu (user_id, week_start, day, meal_type, recipe_id, portion)
             VALUES (?, ?, ?, ?, ?, ?)
             ''', (user_id, week_start, day, meal_type, info['id'], info.get('portion', 1.0)))
-    conn.commit()
+            # ВРЕМЕННАЯ ДИАГНОСТИКА
+def debug_profile():
+    cursor.execute('SELECT * FROM user_profiles')
+    rows = cursor.fetchall()
+    print("=== СОДЕРЖИМОЕ ТАБЛИЦЫ user_profiles ===")
+    for row in rows:
+        print(row)
+    print("===========================================")
+
+debug_profile()
+conn.commit()
 
 def get_weekly_menu(user_id, week_start):
     cursor.execute('SELECT day, meal_type, recipe_id, portion FROM weekly_menu WHERE user_id = ? AND week_start = ?', (user_id, week_start))

@@ -80,8 +80,12 @@ def weekly_menu_keyboard():
 
 # ========== ПРОФИЛЬ ==========
 async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    profile = get_user_profile(user_id)
+        from database import debug_profile
+        debug_profile()
+
+
+        user_id = update.effective_user.id
+        profile = get_user_profile(user_id)
 
     if not profile:
         context.user_data['profile_setup'] = {'step': 'current_weight'}
@@ -132,7 +136,7 @@ async def process_profile_setup(update: Update, context: ContextTypes.DEFAULT_TY
     step = setup.get('step')
 
     
-    
+
     # Загружаем текущий профиль или создаём новый
     profile = get_user_profile(user_id)
     if not profile:
