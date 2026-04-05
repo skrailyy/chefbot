@@ -255,6 +255,7 @@ def get_user_profile(user_id):
     return None
 
 def save_user_profile(user_id, profile):
+    print(f"🔍 ДИАГНОСТИКА: user_id={user_id}, target_weight={profile['target_weight']}, calories={profile['daily_calorie_limit']}")
     cursor.execute('''
     INSERT OR REPLACE INTO user_profiles 
     (user_id, current_weight, target_weight, height, age, gender, activity_level, daily_calorie_limit, disliked_foods, allergies)
