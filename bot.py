@@ -136,20 +136,18 @@ async def process_profile_setup(update: Update, context: ContextTypes.DEFAULT_TY
 
     
 
-    # Загружаем текущий профиль или создаём новый
-    profile = get_user_profile(user_id)
-    if not profile:
-        profile = {
-            'current_weight': 70.0,
-            'target_weight': 70.0,
-            'height': 170.0,
-            'age': 30,
-            'gender': 'male',
-            'activity_level': 'moderate',
-            'daily_calorie_limit': 2000,
-            'disliked_foods': [],
-            'allergies': []
-        }
+    # Всегда создаём новый профиль при настройке
+profile = {
+    'current_weight': 70.0,
+    'target_weight': 70.0,
+    'height': 170.0,
+    'age': 30,
+    'gender': 'male',
+    'activity_level': 'moderate',
+    'daily_calorie_limit': 2000,
+    'disliked_foods': [],
+    'allergies': []
+}
     
     # ШАГ 1: Текущий вес
     if step == 'current_weight':
