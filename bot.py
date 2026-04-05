@@ -10,11 +10,11 @@ from starlette.requests import Request
 from starlette.routing import Route
 import uvicorn
 from database import (
-    add_recipe, get_recipes, find_recipe_by_name, delete_recipe, 
+    add_recipe, get_recipes, find_recipe_by_name, delete_recipe,
     get_recipes_by_category, get_recipes_by_type, get_user_profile,
     save_user_profile, calculate_daily_calories, get_today_calories,
     get_today_macros, add_meal, clear_today_meals, adjust_by_portion,
-    get_recipe_with_portion, save_weekly_menu, get_weekly_menu
+    get_weekly_menu, save_weekly_menu
 )
 
 # ========== НАСТРОЙКИ ==========
@@ -30,7 +30,6 @@ user_states = {}
 user_favorites = {}
 recipe_stats = {}
 user_cart = {}
-user_weekly_menu = {}
 
 # ========== КЛАВИАТУРЫ ==========
 def main_keyboard():
@@ -73,8 +72,8 @@ def weekly_menu_keyboard():
         row = []
         if i < 7:
             row.append(InlineKeyboardButton(days[i], callback_data=f"weekday_{i}"))
-        if i+1 < 7:
-            row.append(InlineKeyboardButton(days[i+1], callback_data=f"weekday_{i+1}"))
+        if i + 1 < 7:
+            row.append(InlineKeyboardButton(days[i + 1], callback_data=f"weekday_{i + 1}"))
         keyboard.append(row)
     keyboard.append([InlineKeyboardButton("✅ Сохранить меню", callback_data="save_weekly")])
     return InlineKeyboardMarkup(keyboard)
@@ -83,7 +82,7 @@ def weekly_menu_keyboard():
 async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     profile = get_user_profile(user_id)
-    
+
     if not profile:
         context.user_data['profile_setup'] = {'step': 'current_weight'}
         await update.message.reply_text(
@@ -91,7 +90,7 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Шаг 1/7: Какой у тебя текущий вес? (в кг, например: 70)"
         )
         return
-    
+
     goal_names = {'lose': '📉 Похудение', 'maintain': '📊 Поддержание', 'gain': '📈 Набор массы'}
     activity_names = {
         'sedentary': 'Сидячий (офисная работа)',
@@ -100,7 +99,7 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         'active': 'Активная (5+ тренировок)',
         'very_active': 'Очень активная (физическая работа)'
     }
-    
+
     await update.message.reply_text(
         f"📊 **Твой профиль:**\n\n"
         f"🎯 Цель: {goal_names.get(profile['goal'], 'Не указана')}\n"
@@ -123,7 +122,7 @@ async def setup_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['profile_setup'] = {'step': 'current_weight'}
     await update.message.reply_text(
         "🔄 **Настройка профиля**\n\n"
-        "Шаг 1/7: Какой у тебя текущий вес? (в кг, например: 70)"
+        "Шаг 1/7: Какой у тебя текущий вес? (в кг)"
     )
 
 async def process_profile_setup(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -131,39 +130,44 @@ async def process_profile_setup(update: Update, context: ContextTypes.DEFAULT_TY
     text = update.message.text
     setup = context.user_data.get('profile_setup', {})
     step = setup.get('step')
-    
+
     profile = get_user_profile(user_id) or {
         'current_weight': 70, 'target_weight': 70, 'height': 170, 'age': 30,
         'gender': 'male', 'activity_level': 'moderate', 'daily_calorie_limit': 2000,
         'disliked_foods': [], 'allergies': []
     }
-    
-    if step == 'current_weight':
-    try:
-        profile['current_weight'] = float(text)
-        setup['step'] = 'target_weight'
-        await update.message.reply_text(f"Текущий вес: {text} кг\n\n2/7: Какой вес ты хочешь?")
-    except:
-        await update.message.reply_text("Введи число (например: 70)")
-        return
 
-elif step == 'target_weight':
-    try:
-        profile['target_weight'] = float(text)
-        if profile['target_weight'] > profile['current_weight']:
-            goal = 'gain'
-            goal_text = "Набор массы"
-        elif profile['target_weight'] < profile['current_weight']:
-            goal = 'lose'
-            goal_text = "Похудение"
-        else:
-            goal = 'maintain'
-            goal_text = "Поддержание веса"
-        setup['step'] = 'gender'
-    except:
-        await update.message.reply_text("Введи число (например: 75)")
-        return
-    
+    if step == 'current_weight':
+        try:
+            profile['current_weight'] = float(text)
+            setup['step'] = 'target_weight'
+            await update.message.reply_text(f"⚖️ Текущий вес: {text} кг\n\nШаг 2/7: Какой вес ты хочешь достичь?")
+        except:
+            await update.message.reply_text("Введи число (например: 70)")
+            return
+
+    elif step == 'target_weight':
+        try:
+            profile['target_weight'] = float(text)
+            if profile['target_weight'] > profile['current_weight']:
+                goal = 'gain'
+                goal_text = "📈 Набор массы"
+            elif profile['target_weight'] < profile['current_weight']:
+                goal = 'lose'
+                goal_text = "📉 Похудение"
+            else:
+                goal = 'maintain'
+                goal_text = "📊 Поддержание веса"
+            setup['step'] = 'gender'
+            await update.message.reply_text(
+                f"🎯 Целевой вес: {text} кг\n"
+                f"🎯 Цель: {goal_text}\n\n"
+                f"Шаг 3/7: Твой пол?\n1️⃣ Мужской\n2️⃣ Женский"
+            )
+        except:
+            await update.message.reply_text("Введи число (например: 75)")
+            return
+
     elif step == 'gender':
         if text in ['1', 'мужской', 'муж', 'м']:
             profile['gender'] = 'male'
@@ -174,7 +178,7 @@ elif step == 'target_weight':
             return
         setup['step'] = 'age'
         await update.message.reply_text("Шаг 4/7: Сколько тебе лет?")
-    
+
     elif step == 'age':
         try:
             profile['age'] = int(text)
@@ -183,7 +187,7 @@ elif step == 'target_weight':
         except:
             await update.message.reply_text("Введи число (например: 25)")
             return
-    
+
     elif step == 'height':
         try:
             profile['height'] = float(text)
@@ -200,35 +204,24 @@ elif step == 'target_weight':
         except:
             await update.message.reply_text("Введи число (например: 170)")
             return
-    
+
     elif step == 'activity':
-    activity_map = {'1': 'sedentary', '2': 'light', '3': 'moderate', '4': 'active', '5': 'very_active'}
-    if text in activity_map:
-        profile['activity_level'] = activity_map[text]
-        
-        if profile['target_weight'] > profile['current_weight']:
-            goal = 'gain'
-        elif profile['target_weight'] < profile['current_weight']:
-            goal = 'lose'
-        else:
-            goal = 'maintain'
-        
-        profile['daily_calorie_limit'] = calculate_daily_calories(
-            profile['current_weight'], profile['height'], profile['age'],
-            profile['gender'], profile['activity_level'], goal
-        )
-        
-        setup['step'] = 'disliked'
-        await update.message.reply_text(
-            f"🔥 Рекомендуемая дневная норма: {profile['daily_calorie_limit']} ккал\n\n"
-            f"Шаг 7/7: Есть ли у тебя нелюбимые продукты?\n"
-            f"Напиши через запятую (например: печень, грибы)\n"
-            f"Или напиши «нет»:"
-        )
-    else:
-        await update.message.reply_text("Введи номер от 1 до 5")
-        return
-            
+        activity_map = {'1': 'sedentary', '2': 'light', '3': 'moderate', '4': 'active', '5': 'very_active'}
+        if text in activity_map:
+            profile['activity_level'] = activity_map[text]
+
+            if profile['target_weight'] > profile['current_weight']:
+                goal = 'gain'
+            elif profile['target_weight'] < profile['current_weight']:
+                goal = 'lose'
+            else:
+                goal = 'maintain'
+
+            profile['daily_calorie_limit'] = calculate_daily_calories(
+                profile['current_weight'], profile['height'], profile['age'],
+                profile['gender'], profile['activity_level'], goal
+            )
+
             setup['step'] = 'disliked'
             await update.message.reply_text(
                 f"🔥 Рекомендуемая дневная норма: {profile['daily_calorie_limit']} ккал\n\n"
@@ -239,7 +232,7 @@ elif step == 'target_weight':
         else:
             await update.message.reply_text("Введи номер от 1 до 5")
             return
-    
+
     elif step == 'disliked':
         if text.lower() != 'нет':
             profile['disliked_foods'] = [x.strip() for x in text.split(',')]
@@ -249,21 +242,21 @@ elif step == 'target_weight':
             f"Напиши через запятую (например: орехи, молоко)\n"
             f"Или напиши «нет»:"
         )
-    
+
     elif step == 'allergies':
         if text.lower() != 'нет':
             profile['allergies'] = [x.strip() for x in text.split(',')]
-        
+
         save_user_profile(user_id, profile)
         del context.user_data['profile_setup']
-        
+
         if profile['target_weight'] > profile['current_weight']:
             goal_text = 'набор массы'
         elif profile['target_weight'] < profile['current_weight']:
             goal_text = 'похудение'
         else:
             goal_text = 'поддержание веса'
-        
+
         await update.message.reply_text(
             f"✅ **Профиль сохранён!**\n\n"
             f"🎯 Цель: {goal_text}\n"
@@ -280,20 +273,20 @@ elif step == 'target_weight':
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     profile = get_user_profile(user_id)
-    
+
     if not profile:
         await update.message.reply_text("👤 Сначала настрой профиль через 👤 Мой профиль или /profile")
         return
-    
+
     today_calories = get_today_calories(user_id)
     remaining = profile['daily_calorie_limit'] - today_calories
     macros = get_today_macros(user_id)
-    
+
     percent = min(100, int((today_calories / profile['daily_calorie_limit']) * 100))
     bar = "█" * (percent // 5) + "░" * (20 - percent // 5)
-    
+
     goal_names = {'lose': '📉 Похудение', 'maintain': '📊 Поддержание', 'gain': '📈 Набор массы'}
-    
+
     await update.message.reply_text(
         f"📊 **Статус питания на сегодня:**\n\n"
         f"🎯 Цель: {goal_names.get(profile['goal'], 'Не указана')}\n"
@@ -307,17 +300,17 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
+# ========== УМНОЕ МЕНЮ ==========
 async def smart_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     profile = get_user_profile(user_id)
-    
+
     if not profile:
         await update.message.reply_text("👤 Сначала настрой профиль через 👤 Мой профиль или /profile")
         return
-    
+
     remaining = profile['daily_calorie_limit'] - get_today_calories(user_id)
-    default_portion = profile.get('default_portion', 1.0)
-    
+
     if remaining <= 0:
         await update.message.reply_text(
             "🎉 Ты уже выполнил дневную норму калорий!\n"
@@ -325,14 +318,14 @@ async def smart_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🍽 Завтра бот снова подберёт для тебя меню."
         )
         return
-    
+
     recipes = get_recipes(user_id)
-    
+
     # Фильтруем по аллергиям и нелюбимым продуктам
     filtered = []
     for r in recipes:
         ingredients = r[4].lower()
-        
+
         allergy_found = False
         for allergy in profile['allergies']:
             if allergy.lower() in ingredients:
@@ -340,7 +333,7 @@ async def smart_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 break
         if allergy_found:
             continue
-        
+
         disliked_found = False
         for disliked in profile['disliked_foods']:
             if disliked.lower() in ingredients:
@@ -348,24 +341,21 @@ async def smart_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 break
         if disliked_found:
             continue
-        
-        # Считаем калории с учётом стандартной порции
-        calories_with_portion = int(r[7] * default_portion)
-        filtered.append((r, calories_with_portion))
-    
+
+        filtered.append(r)
+
     if not filtered:
         await update.message.reply_text(
             f"❌ Нет рецептов, подходящих под твои ограничения.\n\n"
             f"💡 Попробуй добавить новые рецепты через «Добавить рецепт»"
         )
         return
-    
+
     # Группируем по категориям
-    breakfasts = [(r, c) for r, c in filtered if r[3].lower() == "завтрак"]
-    lunches = [(r, c) for r, c in filtered if r[3].lower() == "обед"]
-    dinners = [(r, c) for r, c in filtered if r[3].lower() == "ужин"]
-    
-    # Проверяем наличие рецептов в каждой категории
+    breakfasts = [r for r in filtered if r[3].lower() == "завтрак"]
+    lunches = [r for r in filtered if r[3].lower() == "обед"]
+    dinners = [r for r in filtered if r[3].lower() == "ужин"]
+
     if not breakfasts or not lunches or not dinners:
         missing = []
         if not breakfasts:
@@ -379,217 +369,69 @@ async def smart_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"📝 Добавь рецепты через «Добавить рецепт»"
         )
         return
-    
+
     # Выбираем случайные рецепты
     selected = {
         "завтрак": random.choice(breakfasts),
         "обед": random.choice(lunches),
         "ужин": random.choice(dinners)
     }
-    
-    # Считаем общую калорийность с учётом стандартной порции
-    total_calories = sum(item[1] for item in selected.values())
-    
-    # ========== УМНОЕ МАСШТАБИРОВАНИЕ ПОРЦИЙ ==========
+
+    # Считаем общую калорийность
+    total_calories = sum(r[7] for r in selected.values())
+
+    # Умное масштабирование порций
     if total_calories < remaining:
-        # Нужно увеличить порции
         target = min(remaining, profile['daily_calorie_limit'])
         scale = target / total_calories
-        
-        # Ограничиваем масштаб разумными пределами (0.7x - 2.5x)
         scale = max(0.7, min(2.5, scale))
-        
-        # Округляем до 0.1
         scale = round(scale, 1)
-        
-        # Применяем масштаб ко всем блюдам
-        scaled_recipes = {}
-        for meal_type, (recipe, base_cal) in selected.items():
-            new_portion = round(default_portion * scale, 1)
-            adj = adjust_by_portion(recipe, new_portion)
-            scaled_recipes[meal_type] = (recipe, adj, new_portion)
-        
+
         response = "🧠 **Умное меню с автоматической корректировкой порций:**\n\n"
         total = 0
-        for meal_type, (recipe, adj, portion) in scaled_recipes.items():
+        for meal_type, recipe in selected.items():
+            adj = adjust_by_portion(recipe, scale)
             response += f"🍽 **{meal_type.capitalize()}:** {recipe[2]}\n"
             response += f"   ⏰ {recipe[6]} мин | 🔥 {adj['calories']} ккал\n"
             response += f"   🥩 {adj['protein']}г б | 🧈 {adj['fat']}г ж | 🍚 {adj['carbs']}г у\n"
-            response += f"   🍽 Порция увеличена: {portion}x (было 1x)\n\n"
+            response += f"   🍽 Порция увеличена: {scale}x (было 1x)\n\n"
             total += adj['calories']
-        
+
         response += f"📊 **Итого:** {total} ккал"
         response += f"\n🎯 **Цель:** {profile['daily_calorie_limit']} ккал"
         response += f"\n💪 **Осталось:** {remaining - total} ккал"
-        
+
         if scale > 1.5:
             response += f"\n\n⚠️ Порции увеличены значительно ({scale}x). Для более точного попадания в норму добавь больше рецептов с разной калорийностью."
-        
+
         await update.message.reply_text(response, parse_mode="Markdown")
-        
-        # Сохраняем в корзину
-        user_cart[user_id] = [(recipe, portion) for meal_type, (recipe, adj, portion) in scaled_recipes.items()]
-        
+        user_cart[user_id] = [(recipe, scale) for recipe in selected.values()]
+
     else:
-        # Всё в пределах нормы, оставляем как есть
         response = "🧠 **Умное меню с учётом твоего профиля:**\n\n"
         total = 0
-        for meal_type, (recipe, base_cal) in selected.items():
-            adj = adjust_by_portion(recipe, default_portion)
+        for meal_type, recipe in selected.items():
             response += f"🍽 **{meal_type.capitalize()}:** {recipe[2]}\n"
-            response += f"   ⏰ {recipe[6]} мин | 🔥 {adj['calories']} ккал\n"
-            response += f"   🥩 {adj['protein']}г б | 🧈 {adj['fat']}г ж | 🍚 {adj['carbs']}г у\n\n"
-            total += adj['calories']
-        
+            response += f"   ⏰ {recipe[6]} мин | 🔥 {recipe[7]} ккал\n"
+            response += f"   🥩 {recipe[8]}г б | 🧈 {recipe[9]}г ж | 🍚 {recipe[10]}г у\n\n"
+            total += recipe[7]
+
         response += f"📊 **Итого:** {total} ккал"
         response += f"\n🎯 **Цель:** {profile['daily_calorie_limit']} ккал"
         response += f"\n💪 **Осталось:** {remaining - total} ккал"
-        
+
         await update.message.reply_text(response, parse_mode="Markdown")
-        user_cart[user_id] = [(recipe, default_portion) for meal_type, (recipe, base_cal) in selected.items()]
+        user_cart[user_id] = [(recipe, 1.0) for recipe in selected.values()]
 
-# ========== МЕНЮ НА НЕДЕЛЮ ==========
-async def weekly_menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    profile = get_user_profile(user_id)
-    
-    if not profile:
-        await update.message.reply_text("👤 Сначала настрой профиль через 👤 Мой профиль")
-        return
-    
-    context.user_data['weekly_setup'] = {'day': 0, 'meals': {}}
-    await update.message.reply_text(
-        "📅 **Создание меню на неделю**\n\n"
-        "Выбери день недели:",
-        reply_markup=weekly_menu_keyboard()
-    )
-
-async def select_day_for_meal(update: Update, context: ContextTypes.DEFAULT_TYPE, day_idx):
-    user_id = update.effective_user.id
-    days = ["ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"]
-    
-    context.user_data['weekly_setup']['current_day'] = day_idx
-    context.user_data['weekly_setup']['current_day_name'] = days[day_idx]
-    
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("☀️ Завтрак", callback_data=f"weekly_meal_{day_idx}_breakfast")],
-        [InlineKeyboardButton("🌤️ Обед", callback_data=f"weekly_meal_{day_idx}_lunch")],
-        [InlineKeyboardButton("🌙 Ужин", callback_data=f"weekly_meal_{day_idx}_dinner")],
-        [InlineKeyboardButton("🔙 К дням", callback_data="weekly_back")]
-    ])
-    
-    await update.callback_query.edit_message_text(
-        f"📅 **{days[day_idx]}**\n\nВыбери приём пищи:",
-        reply_markup=keyboard,
-        parse_mode="Markdown"
-    )
-
-async def select_recipe_for_meal(update: Update, context: ContextTypes.DEFAULT_TYPE, day_idx, meal_type):
-    user_id = update.effective_user.id
-    profile = get_user_profile(user_id)
-    default_portion = profile.get('default_portion', 1.0)
-    
-    # Получаем рецепты подходящей категории
-    category_map = {'breakfast': 'завтрак', 'lunch': 'обед', 'dinner': 'ужин'}
-    recipes = get_recipes_by_category(user_id, category_map[meal_type])
-    
-    if not recipes:
-        await update.callback_query.answer("❌ Нет рецептов в этой категории! Добавь их через «Добавить рецепт»")
-        return
-    
-    # Показываем первые 10 рецептов
-    keyboard = []
-    for r in recipes[:10]:
-        adj = adjust_by_portion(r, default_portion)
-        keyboard.append([InlineKeyboardButton(f"{r[2]} ({adj['calories']} ккал)", callback_data=f"weekly_choose_{day_idx}_{meal_type}_{r[0]}")])
-    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data=f"weekly_day_{day_idx}")])
-    
-    await update.callback_query.edit_message_text(
-        f"📅 Выбери рецепт для {meal_type}:",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-
-async def save_weekly_meal(update: Update, context: ContextTypes.DEFAULT_TYPE, day_idx, meal_type, recipe_id):
-    user_id = update.effective_user.id
-    profile = get_user_profile(user_id)
-    default_portion = profile.get('default_portion', 1.0)
-    
-    recipes = get_recipes(user_id)
-    recipe = None
-    for r in recipes:
-        if r[0] == recipe_id:
-            recipe = r
-            break
-    
-    if recipe:
-        if 'weekly_setup' not in context.user_data:
-            context.user_data['weekly_setup'] = {'meals': {}}
-        if day_idx not in context.user_data['weekly_setup']['meals']:
-            context.user_data['weekly_setup']['meals'][day_idx] = {}
-        context.user_data['weekly_setup']['meals'][day_idx][meal_type] = {'id': recipe_id, 'portion': default_portion}
-        
-        await update.callback_query.answer(f"✅ {recipe[2]} добавлен!")
-        
-        # Возвращаемся к выбору приёма пищи
-        days = ["ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"]
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("☀️ Завтрак", callback_data=f"weekly_meal_{day_idx}_breakfast")],
-            [InlineKeyboardButton("🌤️ Обед", callback_data=f"weekly_meal_{day_idx}_lunch")],
-            [InlineKeyboardButton("🌙 Ужин", callback_data=f"weekly_meal_{day_idx}_dinner")],
-            [InlineKeyboardButton("🔙 К дням", callback_data="weekly_back")]
-        ])
-        
-        await update.callback_query.edit_message_text(
-            f"📅 **{days[day_idx]}**\n\n"
-            f"✅ {recipe[2]} добавлен!\n\n"
-            f"Выбери следующий приём пищи:",
-            reply_markup=keyboard,
-            parse_mode="Markdown"
-        )
-
-async def save_weekly_menu_final(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    weekly_data = context.user_data.get('weekly_setup', {}).get('meals', {})
-    
-    if not weekly_data:
-        await update.callback_query.answer("❌ Нет выбранных блюд!")
-        return
-    
-    week_start = datetime.date.today().isoformat()
-    days = ["ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"]
-    
-    menu = {}
-    for day_idx, meals in weekly_data.items():
-        day_name = days[day_idx]
-        menu[day_name] = {}
-        for meal_type, info in meals.items():
-            menu[day_name][meal_type] = info
-    
-    save_weekly_menu(user_id, week_start, menu)
-    
-    await update.callback_query.answer("✅ Меню на неделю сохранено!")
-    await update.callback_query.edit_message_text(
-        "✅ **Меню на неделю сохранено!**\n\n"
-        "Теперь ты можешь:\n"
-        "• Смотреть список покупок на неделю\n"
-        "• Автоматически добавлять блюда в дневник",
-        parse_mode="Markdown"
-    )
-    
-    del context.user_data['weekly_setup']
-
-# ========== МЕНЮ НА СЕГОДНЯ (обычное) ==========
+# ========== МЕНЮ НА СЕГОДНЯ ==========
 async def menu_today(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    profile = get_user_profile(user_id)
-    default_portion = profile.get('default_portion', 1.0) if profile else 1.0
-    
     recipes = get_recipes(user_id)
-    
+
     breakfasts = [r for r in recipes if r[3].lower() == "завтрак"]
     lunches = [r for r in recipes if r[3].lower() == "обед"]
     dinners = [r for r in recipes if r[3].lower() == "ужин"]
-    
+
     missing = []
     if not breakfasts:
         missing.append("завтрак")
@@ -597,43 +439,48 @@ async def menu_today(update: Update, context: ContextTypes.DEFAULT_TYPE):
         missing.append("обед")
     if not dinners:
         missing.append("ужин")
-    
+
     if missing:
         await update.message.reply_text(
             f"❌ Нет рецептов в категориях: {', '.join(missing)}\n\n"
             f"📝 Добавь рецепты через «Добавить рецепт»"
         )
         return
-    
+
     selected = {
         "завтрак": random.choice(breakfasts),
         "обед": random.choice(lunches),
         "ужин": random.choice(dinners)
     }
-    
-    user_cart[user_id] = [(r, default_portion) for r in selected.values()]
-    
+
     response = "🍽 **Меню на сегодня:**\n\n"
     for meal_type, recipe in selected.items():
-        adj = adjust_by_portion(recipe, default_portion)
         response += f"☀️ {meal_type.capitalize()}: {recipe[2]}\n"
-        response += f"   ⏰ {recipe[6]} мин | 🔥 {adj['calories']} ккал\n"
-        response += f"   🍽 Порция: {default_portion}x\n\n"
-    
+        response += f"   ⏰ {recipe[6]} мин | 🔥 {recipe[7]} ккал\n\n"
+
     await update.message.reply_text(response, parse_mode="Markdown")
+    user_cart[user_id] = [(recipe, 1.0) for recipe in selected.values()]
+
+# ========== МЕНЮ НА НЕДЕЛЮ ==========
+async def weekly_menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "📅 **Создание меню на неделю**\n\n"
+        "Выбери день недели:",
+        reply_markup=weekly_menu_keyboard()
+    )
 
 # ========== СПИСОК ПОКУПОК ==========
 async def shopping_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     cart = user_cart.get(user_id, [])
-    
+
     if not cart:
         await update.message.reply_text(
             "🛒 Сначала сгенерируй меню («Меню на сегодня» или «Умное меню»)\n"
             "Или добавь рецепты в корзину кнопкой «Добавить в список покупок»"
         )
         return
-    
+
     ingredients = {}
     for recipe, portion in cart:
         adj = adjust_by_portion(recipe, portion)
@@ -642,14 +489,14 @@ async def shopping_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
             item = item.strip().lower()
             if item and len(item) > 2:
                 ingredients[item] = ingredients.get(item, 0) + 1
-    
+
     response = "🛒 **Список покупок:**\n\n"
     for ing, count in sorted(ingredients.items()):
         response += f"• {ing}\n"
-    
+
     response += f"\n📊 **Всего позиций:** {len(ingredients)}"
     response += f"\n🍽 **Выбрано блюд:** {len(cart)}"
-    
+
     await update.message.reply_text(response, parse_mode="Markdown")
 
 # ========== ПОИСК РЕЦЕПТА ==========
@@ -660,10 +507,10 @@ async def process_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     query = update.message.text
     recipes = find_recipe_by_name(user_id, query)
-    
+
     for r in recipes:
         recipe_stats[(user_id, r[0])] = recipe_stats.get((user_id, r[0]), 0) + 1
-    
+
     if not recipes:
         await update.message.reply_text(f"❌ Рецепт «{query}» не найден")
     else:
@@ -683,11 +530,11 @@ async def my_recipes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     recipes = get_recipes(user_id)
     user_recipes = [r for r in recipes if r[1] != 0]
-    
+
     if not user_recipes:
         await update.message.reply_text("📭 У тебя пока нет своих рецептов.")
         return
-    
+
     response = "📖 **Мои рецепты:**\n\n"
     for r in user_recipes[:20]:
         response += f"🍽 {r[2]}\n   📂 {r[3]} | ⏰ {r[6]} мин | 🔥 {r[7]} ккал (1x)\n   ─────────────\n"
@@ -698,7 +545,7 @@ async def base_recipes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from database import cursor
     cursor.execute('SELECT * FROM recipes WHERE user_id = 0 ORDER BY id')
     recipes = cursor.fetchall()
-    
+
     response = "📚 **Базовые рецепты (50+):**\n\n"
     for r in recipes[:25]:
         emoji = ""
@@ -715,11 +562,11 @@ async def base_recipes(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def show_favorites(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     favs = user_favorites.get(user_id, set())
-    
+
     if not favs:
         await update.message.reply_text("⭐ Нет избранных рецептов")
         return
-    
+
     response = "⭐ **Избранное:**\n\n"
     for fid in favs:
         recipes = get_recipes(user_id)
@@ -733,35 +580,35 @@ async def show_favorites(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def top_recipes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     recipes = get_recipes(user_id)
-    
+
     if not recipes:
         await update.message.reply_text("📭 Нет рецептов")
         return
-    
+
     stats = []
     for r in recipes:
         views = recipe_stats.get((user_id, r[0]), 0)
         stats.append((r[2], views, r[6], r[7]))
     stats.sort(key=lambda x: x[1], reverse=True)
-    
+
     response = "🔥 **Топ рецептов:**\n\n"
     for i, (name, views, time, cal) in enumerate(stats[:5], 1):
         response += f"{i}. {name}\n   👁 {views} просмотров | ⏰ {time} мин | 🔥 {cal} ккал (1x)\n"
-    
+
     if not any(s[1] > 0 for s in stats):
         response += "\n📊 Нет просмотров. Ищи рецепты!"
-    
+
     await update.message.reply_text(response, parse_mode="Markdown")
 
 # ========== ПРАЗДНИЧНЫЕ ==========
 async def holiday_recipes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     recipes = get_recipes_by_type(user_id, "праздничное")
-    
+
     if not recipes:
         await update.message.reply_text("🎉 Оливье, Сельдь под шубой, Мимоза, Наполеон, Тирамису")
         return
-    
+
     response = "🎉 **Праздничные рецепты:**\n\n"
     for r in recipes:
         response += f"🍽 {r[2]}\n   ⏰ {r[6]} мин | 🔥 {r[7]} ккал (1x)\n   ─────────────\n"
@@ -771,11 +618,11 @@ async def holiday_recipes(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def sport_recipes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     recipes = get_recipes_by_type(user_id, "спортивное")
-    
+
     if not recipes:
         await update.message.reply_text("🏋️ Куриное филе с гречкой, Омлет с овощами, Творог с ягодами, Протеиновый смузи")
         return
-    
+
     response = "🏋️ **Спортивное питание:**\n\n"
     for r in recipes:
         response += f"🍽 {r[2]}\n   ⏰ {r[6]} мин | 🔥 {r[7]} ккал (1x) | 🥩 {r[8]}г белка\n   ─────────────\n"
@@ -796,14 +643,14 @@ async def show_by_type(update: Update, context: ContextTypes.DEFAULT_TYPE, type_
     recipe_type = type_map.get(type_text)
     if not recipe_type:
         return
-    
+
     user_id = update.effective_user.id
     recipes = get_recipes_by_type(user_id, recipe_type)
-    
+
     if not recipes:
         await update.message.reply_text(f"❌ Нет рецептов в категории {type_text}")
         return
-    
+
     response = f"🥗 **{type_text}:**\n\n"
     for r in recipes[:15]:
         response += f"🍽 {r[2]}\n   📂 {r[3]} | ⏰ {r[6]} мин | 🔥 {r[7]} ккал (1x)\n   ─────────────\n"
@@ -817,7 +664,7 @@ async def from_fridge(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def process_fridge(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     products = [p.strip().lower() for p in update.message.text.split(',')]
-    
+
     recipes = get_recipes(user_id)
     matches = []
     for r in recipes:
@@ -826,7 +673,7 @@ async def process_fridge(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if match_count > 0:
             matches.append((r, match_count))
     matches.sort(key=lambda x: x[1], reverse=True)
-    
+
     if not matches:
         await update.message.reply_text("🥗 Ничего не найдено")
     else:
@@ -834,7 +681,7 @@ async def process_fridge(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for r, cnt in matches[:5]:
             response += f"🍽 {r[2]} (совпадений: {cnt})\n   ⏰ {r[6]} мин | 🔥 {r[7]} ккал (1x)\n\n"
         await update.message.reply_text(response, parse_mode="Markdown")
-    
+
     context.user_data['fridge_mode'] = False
 
 # ========== ДОБАВЛЕНИЕ РЕЦЕПТА ==========
@@ -848,7 +695,7 @@ async def add_recipe_process(update: Update, context: ContextTypes.DEFAULT_TYPE)
     state = user_states[user_id]
     text = update.message.text
     step = state["step"]
-    
+
     if step == "name":
         state["name"] = text
         state["step"] = "category"
@@ -929,24 +776,24 @@ async def add_recipe_process(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text
-    
+
     if user_id in user_states:
         await add_recipe_process(update, context)
         return
-    
+
     if context.user_data.get('fridge_mode'):
         await process_fridge(update, context)
         return
-    
+
     if context.user_data.get('search_mode'):
         await process_search(update, context)
         context.user_data['search_mode'] = False
         return
-    
+
     if context.user_data.get('profile_setup'):
         await process_profile_setup(update, context)
         return
-    
+
     if text == "📝 Добавить рецепт":
         await add_recipe_start(update, context)
     elif text == "📖 Мои рецепты":
@@ -984,7 +831,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await profile_command(update, context)
     elif text == "🔙 Назад":
         await update.message.reply_text("Главное меню", reply_markup=main_keyboard())
-    elif text == "Помощь":   # ← без D
+    elif text == "❓ Помощь":
         await help_command(update, context)
     else:
         await update.message.reply_text("Используй кнопки внизу 👇", reply_markup=main_keyboard())
@@ -1002,7 +849,6 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=main_keyboard()
     )
 
-# ========== КОМАНДЫ ==========
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "👨‍🍳 **Привет! Я ChefMind — твой умный нутрициолог-помощник!**\n\n"
@@ -1024,7 +870,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     user_id = update.effective_user.id
     data = query.data
-    
+
     if data.startswith("fav_"):
         recipe_id = int(data.split("_")[1])
         if user_id not in user_favorites:
@@ -1039,23 +885,21 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 is_fav = recipe_id in user_favorites[user_id]
                 await query.edit_message_reply_markup(reply_markup=favorite_keyboard(recipe_id, is_fav))
                 break
-    
+
     elif data.startswith("cart_"):
         recipe_id = int(data.split("_")[1])
         recipes = get_recipes(user_id)
         for r in recipes:
             if r[0] == recipe_id:
-                profile = get_user_profile(user_id)
-                portion = profile.get('default_portion', 1.0) if profile else 1.0
                 if user_id not in user_cart:
                     user_cart[user_id] = []
-                if (r, portion) not in user_cart[user_id]:
-                    user_cart[user_id].append((r, portion))
-                    await query.answer(f"✅ {r[2]} добавлен в список покупок (порция {portion}x)!")
+                if (r, 1.0) not in user_cart[user_id]:
+                    user_cart[user_id].append((r, 1.0))
+                    await query.answer(f"✅ {r[2]} добавлен в список покупок!")
                 else:
                     await query.answer("⚠️ Уже в списке")
                 break
-    
+
     elif data.startswith("eat_"):
         recipe_id = int(data.split("_")[1])
         recipes = get_recipes(user_id)
@@ -1063,7 +907,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if r[0] == recipe_id:
                 await query.edit_message_reply_markup(reply_markup=portion_keyboard(recipe_id, r[2]))
                 break
-    
+
     elif data.startswith("portion_"):
         parts = data.split("_")
         recipe_id = int(parts[1])
@@ -1088,7 +932,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     parse_mode="Markdown"
                 )
                 break
-    
+
     elif data.startswith("meal_"):
         parts = data.split("_")
         recipe_id = int(parts[1])
@@ -1102,13 +946,13 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await query.answer(f"✅ {r[2]} ({portion}x) добавлен в дневник как {meal_type}!")
                 await query.delete_message()
                 break
-    
+
     elif data.startswith("del_"):
         recipe_id = int(data.split("_")[1])
         if delete_recipe(recipe_id, user_id):
             await query.message.delete()
             await query.message.reply_text("🗑 Рецепт удалён!")
-    
+
     elif data.startswith("back_"):
         recipe_id = int(data.split("_")[1])
         recipes = get_recipes(user_id)
@@ -1117,40 +961,101 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 is_fav = r[0] in user_favorites.get(user_id, set())
                 await query.edit_message_reply_markup(reply_markup=favorite_keyboard(recipe_id, is_fav))
                 break
-    
-    # Обработка меню на неделю
+
     elif data.startswith("weekday_"):
         day_idx = int(data.split("_")[1])
-        await select_day_for_meal(update, context, day_idx)
-    
+        days = ["ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"]
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("☀️ Завтрак", callback_data=f"weekly_meal_{day_idx}_breakfast")],
+            [InlineKeyboardButton("🌤️ Обед", callback_data=f"weekly_meal_{day_idx}_lunch")],
+            [InlineKeyboardButton("🌙 Ужин", callback_data=f"weekly_meal_{day_idx}_dinner")],
+            [InlineKeyboardButton("🔙 К дням", callback_data="weekly_back")]
+        ])
+        await query.edit_message_text(
+            f"📅 **{days[day_idx]}**\n\nВыбери приём пищи:",
+            reply_markup=keyboard,
+            parse_mode="Markdown"
+        )
+
     elif data.startswith("weekly_meal_"):
         parts = data.split("_")
         day_idx = int(parts[2])
         meal_type = parts[3]
-        await select_recipe_for_meal(update, context, day_idx, meal_type)
-    
+        user_id = update.effective_user.id
+        category_map = {'breakfast': 'завтрак', 'lunch': 'обед', 'dinner': 'ужин'}
+        recipes = get_recipes_by_category(user_id, category_map[meal_type])
+        if not recipes:
+            await query.answer("❌ Нет рецептов в этой категории!")
+            return
+        keyboard = []
+        for r in recipes[:10]:
+            keyboard.append([InlineKeyboardButton(f"{r[2]} ({r[7]} ккал)", callback_data=f"weekly_choose_{day_idx}_{meal_type}_{r[0]}")])
+        keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data=f"weekday_{day_idx}")])
+        await query.edit_message_text(
+            f"📅 Выбери рецепт для {meal_type}:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+
     elif data.startswith("weekly_choose_"):
         parts = data.split("_")
         day_idx = int(parts[2])
         meal_type = parts[3]
         recipe_id = int(parts[4])
-        await save_weekly_meal(update, context, day_idx, meal_type, recipe_id)
-    
+        user_id = update.effective_user.id
+        if 'weekly_menu' not in context.user_data:
+            context.user_data['weekly_menu'] = {}
+        if day_idx not in context.user_data['weekly_menu']:
+            context.user_data['weekly_menu'][day_idx] = {}
+        context.user_data['weekly_menu'][day_idx][meal_type] = recipe_id
+        await query.answer("✅ Рецепт добавлен в меню!")
+        days = ["ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"]
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("☀️ Завтрак", callback_data=f"weekly_meal_{day_idx}_breakfast")],
+            [InlineKeyboardButton("🌤️ Обед", callback_data=f"weekly_meal_{day_idx}_lunch")],
+            [InlineKeyboardButton("🌙 Ужин", callback_data=f"weekly_meal_{day_idx}_dinner")],
+            [InlineKeyboardButton("🔙 К дням", callback_data="weekly_back")]
+        ])
+        await query.edit_message_text(
+            f"📅 **{days[day_idx]}**\n\n✅ Рецепт добавлен!\n\nВыбери следующий приём пищи:",
+            reply_markup=keyboard,
+            parse_mode="Markdown"
+        )
+
     elif data == "weekly_back":
-        await update.callback_query.edit_message_text(
+        await query.edit_message_text(
             "📅 **Создание меню на неделю**\n\nВыбери день недели:",
             reply_markup=weekly_menu_keyboard(),
             parse_mode="Markdown"
         )
-    
+
     elif data == "save_weekly":
-        await save_weekly_menu_final(update, context)
+        if 'weekly_menu' not in context.user_data or not context.user_data['weekly_menu']:
+            await query.answer("❌ Нет выбранных блюд!")
+            return
+        week_start = datetime.date.today().isoformat()
+        days = ["ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"]
+        menu = {}
+        for day_idx, meals in context.user_data['weekly_menu'].items():
+            day_name = days[day_idx]
+            menu[day_name] = {}
+            for meal_type, recipe_id in meals.items():
+                menu[day_name][meal_type] = {'id': recipe_id, 'portion': 1.0}
+        save_weekly_menu(user_id, week_start, menu)
+        del context.user_data['weekly_menu']
+        await query.answer("✅ Меню на неделю сохранено!")
+        await query.edit_message_text(
+            "✅ **Меню на неделю сохранено!**\n\n"
+            "Теперь ты можешь:\n"
+            "• Смотреть список покупок на неделю\n"
+            "• Автоматически добавлять блюда в дневник",
+            parse_mode="Markdown"
+        )
 
 # ========== ЗАПУСК WEBHOOK ==========
 async def start_webhook():
     app = Application.builder().token(TOKEN).build()
     await app.initialize()
-    
+
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("profile", profile_command))
@@ -1160,25 +1065,25 @@ async def start_webhook():
     app.add_handler(CommandHandler("weekly_menu", weekly_menu_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(CallbackQueryHandler(handle_callback))
-    
+
     webhook_url = f"{WEBHOOK_URL}/webhook"
     await app.bot.set_webhook(webhook_url)
     logger.info(f"Webhook установлен на {webhook_url}")
-    
+
     async def webhook_handler(request: Request):
         data = await request.json()
         update = Update.de_json(data, app.bot)
         await app.process_update(update)
         return Response()
-    
+
     async def health_check(request: Request):
         return PlainTextResponse("ok")
-    
+
     starlette_app = Starlette(routes=[
         Route("/webhook", webhook_handler, methods=["POST"]),
         Route("/health", health_check, methods=["GET"]),
     ])
-    
+
     config = uvicorn.Config(app=starlette_app, host="0.0.0.0", port=PORT)
     server = uvicorn.Server(config)
     await server.serve()
