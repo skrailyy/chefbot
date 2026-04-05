@@ -1,9 +1,7 @@
 import os
-
-# ПРИНУДИТЕЛЬНОЕ УДАЛЕНИЕ БД ПРИ ЗАПУСКЕ
 if os.path.exists('recipes.db'):
     os.remove('recipes.db')
-    print("✅ БД УДАЛЕНА - СОЗДАЁТСЯ НОВАЯ")
+    print("✅ БД удалена")
 import sqlite3
 import datetime
 
