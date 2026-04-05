@@ -81,8 +81,7 @@ def weekly_menu_keyboard():
 # ========== ПРОФИЛЬ ==========
 
 async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    from database import debug_profile
-    debug_profile()
+    
 
     user_id = update.effective_user.id
     profile = get_user_profile(user_id)
