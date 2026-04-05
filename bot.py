@@ -79,18 +79,18 @@ def weekly_menu_keyboard():
     return InlineKeyboardMarkup(keyboard)
 
 # ========== ПРОФИЛЬ ==========
+
 async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        from database import debug_profile
-        debug_profile()
+    from database import debug_profile
+    debug_profile()
 
-
-        user_id = update.effective_user.id
-        profile = get_user_profile(user_id)
+    user_id = update.effective_user.id
+    profile = get_user_profile(user_id)
 
     if not profile:
         context.user_data['profile_setup'] = {'step': 'current_weight'}
         await update.message.reply_text(
-            "👤 **Давай настроим твой профиль!**\n\n"
+            "**Давай настроим твой профиль!**\n\n"
             "Шаг 1/7: Какой у тебя текущий вес? (в кг, например: 70)"
         )
         return
