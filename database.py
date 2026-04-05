@@ -249,7 +249,6 @@ def get_user_profile(user_id):
     cursor.execute('SELECT * FROM user_profiles WHERE user_id = ?', (user_id,))
     row = cursor.fetchone()
     if row:
-        # Определяем цель на основе текущего и целевого веса
         current = row[1]
         target = row[2]
         if target > current:
@@ -258,6 +257,7 @@ def get_user_profile(user_id):
             goal = 'lose'
         else:
             goal = 'maintain'
+        
         return {
             'goal': goal,
             'current_weight': current,
