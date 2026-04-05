@@ -979,7 +979,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == "🔙 Назад":
         await update.message.reply_text("Главное меню", reply_markup=main_keyboard())
     elif text == "❓ Помощь":D
-        await help_command(update, context)
+ await help_command(update, context)
     else:
         await update.message.reply_text("Используй кнопки внизу 👇", reply_markup=main_keyboard())
 
