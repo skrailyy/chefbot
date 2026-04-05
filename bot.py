@@ -1,17 +1,7 @@
 import os
 import logging
 import random
-
-# ========== ПРИНУДИТЕЛЬНОЕ УДАЛЕНИЕ СТАРОЙ БД (ОДИН РАЗ) ==========
-# После успешного запуска ЭТИ 6 СТРОК МОЖНО УДАЛИТЬ
-db_path = 'recipes.db'
-if os.path.exists(db_path):
-    try:
-        os.remove(db_path)
-        print(f"✅ Удалена старая БД: {db_path}")
-    except Exception as e:
-        print(f"⚠️ Не удалось удалить: {e}")
-
+import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 from starlette.applications import Starlette
@@ -23,7 +13,8 @@ from database import (
     add_recipe, get_recipes, find_recipe_by_name, delete_recipe, 
     get_recipes_by_category, get_recipes_by_type, get_user_profile,
     save_user_profile, calculate_daily_calories, get_today_calories,
-    get_today_macros, add_meal, clear_today_meals
+    get_today_macros, add_meal, clear_today_meals, adjust_by_portion,
+    get_recipe_with_portion, save_weekly_menu, get_weekly_menu
 )
 
 # ========== НАСТРОЙКИ ==========
@@ -39,6 +30,7 @@ user_states = {}
 user_favorites = {}
 recipe_stats = {}
 user_cart = {}
+user_weekly_menu = {}
 
 # ========== КЛАВИАТУРЫ ==========
 def main_keyboard():
@@ -47,11 +39,11 @@ def main_keyboard():
         [KeyboardButton("📖 Мои рецепты"), KeyboardButton("📚 Базовые рецепты")],
         [KeyboardButton("🔍 Найти рецепт"), KeyboardButton("🍽 Меню на сегодня")],
         [KeyboardButton("🧠 Умное меню"), KeyboardButton("📊 Статус питания")],
-        [KeyboardButton("🛒 Список покупок"), KeyboardButton("🥗 Что из остатков?")],
-        [KeyboardButton("⭐ Избранное"), KeyboardButton("🔥 Топ рецептов")],
-        [KeyboardButton("🎉 Праздничные"), KeyboardButton("🏋️ Спортивное питание")],
-        [KeyboardButton("🥗 По типу питания"), KeyboardButton("👤 Мой профиль")],
-        [KeyboardButton("❓ Помощь")]
+        [KeyboardButton("📅 Меню на неделю"), KeyboardButton("🛒 Список покупок")],
+        [KeyboardButton("🥗 Что из остатков?"), KeyboardButton("⭐ Избранное")],
+        [KeyboardButton("🔥 Топ рецептов"), KeyboardButton("🎉 Праздничные")],
+        [KeyboardButton("🏋️ Спортивное питание"), KeyboardButton("🥗 По типу питания")],
+        [KeyboardButton("👤 Мой профиль"), KeyboardButton("❓ Помощь")]
     ]
     return ReplyKeyboardMarkup(buttons, resize_keyboard=True)
 
@@ -62,6 +54,29 @@ def favorite_keyboard(recipe_id, is_favorite):
         [InlineKeyboardButton("📝 Добавить в дневник", callback_data=f"eat_{recipe_id}")],
         [InlineKeyboardButton("🗑 Удалить рецепт", callback_data=f"del_{recipe_id}")]
     ]
+    return InlineKeyboardMarkup(keyboard)
+
+def portion_keyboard(recipe_id, recipe_name):
+    keyboard = [
+        [InlineKeyboardButton("0.5x (половинная)", callback_data=f"portion_{recipe_id}_0.5")],
+        [InlineKeyboardButton("1x (стандартная)", callback_data=f"portion_{recipe_id}_1.0")],
+        [InlineKeyboardButton("1.5x (увеличенная)", callback_data=f"portion_{recipe_id}_1.5")],
+        [InlineKeyboardButton("2x (двойная)", callback_data=f"portion_{recipe_id}_2.0")],
+        [InlineKeyboardButton("🔙 Назад", callback_data=f"back_{recipe_id}")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def weekly_menu_keyboard():
+    days = ["ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"]
+    keyboard = []
+    for i in range(0, 7, 2):
+        row = []
+        if i < 7:
+            row.append(InlineKeyboardButton(days[i], callback_data=f"weekday_{i}"))
+        if i+1 < 7:
+            row.append(InlineKeyboardButton(days[i+1], callback_data=f"weekday_{i+1}"))
+        keyboard.append(row)
+    keyboard.append([InlineKeyboardButton("✅ Сохранить меню", callback_data="save_weekly")])
     return InlineKeyboardMarkup(keyboard)
 
 # ========== ПРОФИЛЬ ==========
@@ -98,7 +113,8 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🎂 Возраст: {profile['age']} лет\n"
         f"🚻 Пол: {'Мужской' if profile['gender'] == 'male' else 'Женский'}\n"
         f"🏃 Активность: {activity_names.get(profile['activity_level'], 'Не указана')}\n"
-        f"🔥 Дневной лимит: {profile['daily_calorie_limit']} ккал\n\n"
+        f"🔥 Дневной лимит: {profile['daily_calorie_limit']} ккал\n"
+        f"🍽 Стандартная порция: {profile.get('default_portion', 1.0)}x\n\n"
         f"❌ Нелюбимые продукты: {', '.join(profile['disliked_foods']) if profile['disliked_foods'] else 'Нет'}\n"
         f"⚠️ Аллергии: {', '.join(profile['allergies']) if profile['allergies'] else 'Нет'}\n\n"
         f"🔄 Чтобы изменить профиль, используй /setup",
@@ -127,7 +143,7 @@ async def process_profile_setup(update: Update, context: ContextTypes.DEFAULT_TY
     profile = get_user_profile(user_id) or {
         'goal': 'maintain', 'weight': 70, 'height': 170, 'age': 30,
         'gender': 'male', 'activity_level': 'moderate', 'daily_calorie_limit': 2000,
-        'disliked_foods': [], 'allergies': []
+        'disliked_foods': [], 'allergies': [], 'default_portion': 1.0
     }
     
     if step == 'goal':
@@ -197,15 +213,36 @@ async def process_profile_setup(update: Update, context: ContextTypes.DEFAULT_TY
                 profile['weight'], profile['height'], profile['age'],
                 profile['gender'], profile['activity_level'], profile['goal']
             )
-            setup['step'] = 'disliked'
+            setup['step'] = 'portion'
             await update.message.reply_text(
                 f"🔥 Рекомендуемая дневная норма: {profile['daily_calorie_limit']} ккал\n\n"
-                f"❌ Есть ли у тебя нелюбимые продукты?\n"
-                f"Напиши через запятую (например: печень, грибы)\n"
-                f"Или напиши «нет»:"
+                f"🍽 Какая у тебя стандартная порция?\n"
+                f"0.5x — половинная\n"
+                f"1x — стандартная\n"
+                f"1.5x — увеличенная\n"
+                f"2x — двойная\n\n"
+                f"Напиши число (0.5, 1, 1.5 или 2):"
             )
         else:
             await update.message.reply_text("Введи номер от 1 до 5")
+            return
+    
+    elif step == 'portion':
+        try:
+            portion = float(text)
+            if portion in [0.5, 1.0, 1.5, 2.0]:
+                profile['default_portion'] = portion
+                setup['step'] = 'disliked'
+                await update.message.reply_text(
+                    f"🍽 Стандартная порция: {portion}x\n\n"
+                    f"❌ Есть ли у тебя нелюбимые продукты?\n"
+                    f"Напиши через запятую (например: печень, грибы)\n"
+                    f"Или напиши «нет»:"
+                )
+            else:
+                await update.message.reply_text("Введи 0.5, 1, 1.5 или 2")
+        except:
+            await update.message.reply_text("Введи число (0.5, 1, 1.5 или 2)")
             return
     
     elif step == 'disliked':
@@ -230,6 +267,7 @@ async def process_profile_setup(update: Update, context: ContextTypes.DEFAULT_TY
             f"🎯 Цель: {profile['goal']}\n"
             f"⚖️ Вес: {profile['weight']} кг\n"
             f"🔥 Дневной лимит: {profile['daily_calorie_limit']} ккал\n"
+            f"🍽 Стандартная порция: {profile['default_portion']}x\n"
             f"❌ Нелюбимые: {', '.join(profile['disliked_foods']) if profile['disliked_foods'] else 'Нет'}\n"
             f"⚠️ Аллергии: {', '.join(profile['allergies']) if profile['allergies'] else 'Нет'}\n\n"
             f"Теперь бот будет подбирать рецепты с учётом твоих предпочтений! 🧠",
@@ -278,6 +316,7 @@ async def smart_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     remaining = profile['daily_calorie_limit'] - get_today_calories(user_id)
+    default_portion = profile.get('default_portion', 1.0)
     
     if remaining <= 0:
         await update.message.reply_text(
@@ -310,14 +349,16 @@ async def smart_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if disliked_found:
             continue
         
-        if r[7] <= remaining:
+        # Считаем калории с учётом стандартной порции
+        calories_with_portion = int(r[7] * default_portion)
+        if calories_with_portion <= remaining:
             filtered.append(r)
     
     if not filtered:
         await update.message.reply_text(
             f"❌ Нет рецептов, подходящих под твои ограничения и остаток калорий ({remaining} ккал).\n\n"
             f"💡 **Советы:**\n"
-            f"• Съешь что-нибудь лёгкое (овощи, йогурт)\n"
+            f"• Уменьши порцию (настрой в профиле)\n"
             f"• Добавь новые рецепты через «Добавить рецепт»\n"
             f"• Измени профиль через /profile\n\n"
             f"🔥 Твой остаток: {remaining} ккал",
@@ -346,10 +387,12 @@ async def smart_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     total = 0
     
     for meal_type, recipe in selected.items():
+        adj = adjust_by_portion(recipe, default_portion)
         response += f"🍽 **{meal_type.capitalize()}:** {recipe[2]}\n"
-        response += f"   ⏰ {recipe[6]} мин | 🔥 {recipe[7]} ккал\n"
-        response += f"   🥩 {recipe[8]}г б | 🧈 {recipe[9]}г ж | 🍚 {recipe[10]}г у\n\n"
-        total += recipe[7]
+        response += f"   ⏰ {recipe[6]} мин | 🔥 {adj['calories']} ккал\n"
+        response += f"   🥩 {adj['protein']}г б | 🧈 {adj['fat']}г ж | 🍚 {adj['carbs']}г у\n"
+        response += f"   🍽 Порция: {default_portion}x\n\n"
+        total += adj['calories']
     
     response += f"📊 **Итого:** {total} ккал"
     response += f"\n💪 **Останется:** {remaining - total} ккал\n\n"
@@ -358,11 +401,144 @@ async def smart_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(response, parse_mode="Markdown")
     
     # Сохраняем выбранные рецепты в корзину
-    user_cart[user_id] = list(selected.values())
+    user_cart[user_id] = [(r, default_portion) for r in selected.values()]
+
+# ========== МЕНЮ НА НЕДЕЛЮ ==========
+async def weekly_menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    profile = get_user_profile(user_id)
+    
+    if not profile:
+        await update.message.reply_text("👤 Сначала настрой профиль через 👤 Мой профиль")
+        return
+    
+    context.user_data['weekly_setup'] = {'day': 0, 'meals': {}}
+    await update.message.reply_text(
+        "📅 **Создание меню на неделю**\n\n"
+        "Выбери день недели:",
+        reply_markup=weekly_menu_keyboard()
+    )
+
+async def select_day_for_meal(update: Update, context: ContextTypes.DEFAULT_TYPE, day_idx):
+    user_id = update.effective_user.id
+    days = ["ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"]
+    
+    context.user_data['weekly_setup']['current_day'] = day_idx
+    context.user_data['weekly_setup']['current_day_name'] = days[day_idx]
+    
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("☀️ Завтрак", callback_data=f"weekly_meal_{day_idx}_breakfast")],
+        [InlineKeyboardButton("🌤️ Обед", callback_data=f"weekly_meal_{day_idx}_lunch")],
+        [InlineKeyboardButton("🌙 Ужин", callback_data=f"weekly_meal_{day_idx}_dinner")],
+        [InlineKeyboardButton("🔙 К дням", callback_data="weekly_back")]
+    ])
+    
+    await update.callback_query.edit_message_text(
+        f"📅 **{days[day_idx]}**\n\nВыбери приём пищи:",
+        reply_markup=keyboard,
+        parse_mode="Markdown"
+    )
+
+async def select_recipe_for_meal(update: Update, context: ContextTypes.DEFAULT_TYPE, day_idx, meal_type):
+    user_id = update.effective_user.id
+    profile = get_user_profile(user_id)
+    default_portion = profile.get('default_portion', 1.0)
+    
+    # Получаем рецепты подходящей категории
+    category_map = {'breakfast': 'завтрак', 'lunch': 'обед', 'dinner': 'ужин'}
+    recipes = get_recipes_by_category(user_id, category_map[meal_type])
+    
+    if not recipes:
+        await update.callback_query.answer("❌ Нет рецептов в этой категории! Добавь их через «Добавить рецепт»")
+        return
+    
+    # Показываем первые 10 рецептов
+    keyboard = []
+    for r in recipes[:10]:
+        adj = adjust_by_portion(r, default_portion)
+        keyboard.append([InlineKeyboardButton(f"{r[2]} ({adj['calories']} ккал)", callback_data=f"weekly_choose_{day_idx}_{meal_type}_{r[0]}")])
+    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data=f"weekly_day_{day_idx}")])
+    
+    await update.callback_query.edit_message_text(
+        f"📅 Выбери рецепт для {meal_type}:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+async def save_weekly_meal(update: Update, context: ContextTypes.DEFAULT_TYPE, day_idx, meal_type, recipe_id):
+    user_id = update.effective_user.id
+    profile = get_user_profile(user_id)
+    default_portion = profile.get('default_portion', 1.0)
+    
+    recipes = get_recipes(user_id)
+    recipe = None
+    for r in recipes:
+        if r[0] == recipe_id:
+            recipe = r
+            break
+    
+    if recipe:
+        if 'weekly_setup' not in context.user_data:
+            context.user_data['weekly_setup'] = {'meals': {}}
+        if day_idx not in context.user_data['weekly_setup']['meals']:
+            context.user_data['weekly_setup']['meals'][day_idx] = {}
+        context.user_data['weekly_setup']['meals'][day_idx][meal_type] = {'id': recipe_id, 'portion': default_portion}
+        
+        await update.callback_query.answer(f"✅ {recipe[2]} добавлен!")
+        
+        # Возвращаемся к выбору приёма пищи
+        days = ["ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"]
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("☀️ Завтрак", callback_data=f"weekly_meal_{day_idx}_breakfast")],
+            [InlineKeyboardButton("🌤️ Обед", callback_data=f"weekly_meal_{day_idx}_lunch")],
+            [InlineKeyboardButton("🌙 Ужин", callback_data=f"weekly_meal_{day_idx}_dinner")],
+            [InlineKeyboardButton("🔙 К дням", callback_data="weekly_back")]
+        ])
+        
+        await update.callback_query.edit_message_text(
+            f"📅 **{days[day_idx]}**\n\n"
+            f"✅ {recipe[2]} добавлен!\n\n"
+            f"Выбери следующий приём пищи:",
+            reply_markup=keyboard,
+            parse_mode="Markdown"
+        )
+
+async def save_weekly_menu_final(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    weekly_data = context.user_data.get('weekly_setup', {}).get('meals', {})
+    
+    if not weekly_data:
+        await update.callback_query.answer("❌ Нет выбранных блюд!")
+        return
+    
+    week_start = datetime.date.today().isoformat()
+    days = ["ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"]
+    
+    menu = {}
+    for day_idx, meals in weekly_data.items():
+        day_name = days[day_idx]
+        menu[day_name] = {}
+        for meal_type, info in meals.items():
+            menu[day_name][meal_type] = info
+    
+    save_weekly_menu(user_id, week_start, menu)
+    
+    await update.callback_query.answer("✅ Меню на неделю сохранено!")
+    await update.callback_query.edit_message_text(
+        "✅ **Меню на неделю сохранено!**\n\n"
+        "Теперь ты можешь:\n"
+        "• Смотреть список покупок на неделю\n"
+        "• Автоматически добавлять блюда в дневник",
+        parse_mode="Markdown"
+    )
+    
+    del context.user_data['weekly_setup']
 
 # ========== МЕНЮ НА СЕГОДНЯ (обычное) ==========
 async def menu_today(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
+    profile = get_user_profile(user_id)
+    default_portion = profile.get('default_portion', 1.0) if profile else 1.0
+    
     recipes = get_recipes(user_id)
     
     breakfasts = [r for r in recipes if r[3].lower() == "завтрак"]
@@ -390,12 +566,14 @@ async def menu_today(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "ужин": random.choice(dinners)
     }
     
-    user_cart[user_id] = list(selected.values())
+    user_cart[user_id] = [(r, default_portion) for r in selected.values()]
     
     response = "🍽 **Меню на сегодня:**\n\n"
     for meal_type, recipe in selected.items():
+        adj = adjust_by_portion(recipe, default_portion)
         response += f"☀️ {meal_type.capitalize()}: {recipe[2]}\n"
-        response += f"   ⏰ {recipe[6]} мин | 🔥 {recipe[7]} ккал\n\n"
+        response += f"   ⏰ {recipe[6]} мин | 🔥 {adj['calories']} ккал\n"
+        response += f"   🍽 Порция: {default_portion}x\n\n"
     
     await update.message.reply_text(response, parse_mode="Markdown")
 
@@ -412,8 +590,9 @@ async def shopping_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     ingredients = {}
-    for recipe in cart:
-        items = recipe[4].split(',')
+    for recipe, portion in cart:
+        adj = adjust_by_portion(recipe, portion)
+        items = adj['ingredients'].split(',')
         for item in items:
             item = item.strip().lower()
             if item and len(item) > 2:
@@ -447,10 +626,10 @@ async def process_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
             is_fav = r[0] in user_favorites.get(user_id, set())
             response = f"🍽 **{r[2]}**\n\n"
             response += f"📂 Категория: {r[3]}\n"
-            response += f"🛒 Ингредиенты: {r[4]}\n"
+            response += f"🛒 Ингредиенты (1x): {r[4]}\n"
             response += f"👨‍🍳 Приготовление: {r[5]}\n"
             response += f"⏰ Время: {r[6]} мин\n"
-            response += f"🔥 Калории: {r[7]} ккал\n"
+            response += f"🔥 Калории (1x): {r[7]} ккал\n"
             response += f"🥩 {r[8]}г б | 🧈 {r[9]}г ж | 🍚 {r[10]}г у"
             await update.message.reply_text(response, parse_mode="Markdown", reply_markup=favorite_keyboard(r[0], is_fav))
 
@@ -466,7 +645,7 @@ async def my_recipes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     response = "📖 **Мои рецепты:**\n\n"
     for r in user_recipes[:20]:
-        response += f"🍽 {r[2]}\n   📂 {r[3]} | ⏰ {r[6]} мин | 🔥 {r[7]} ккал\n   ─────────────\n"
+        response += f"🍽 {r[2]}\n   📂 {r[3]} | ⏰ {r[6]} мин | 🔥 {r[7]} ккал (1x)\n   ─────────────\n"
     await update.message.reply_text(response, parse_mode="Markdown")
 
 # ========== БАЗОВЫЕ РЕЦЕПТЫ ==========
@@ -484,7 +663,7 @@ async def base_recipes(update: Update, context: ContextTypes.DEFAULT_TYPE):
             emoji = "🥗 "
         elif r[11] == "спортивное":
             emoji = "🏋️ "
-        response += f"{emoji}🍽 {r[2]}\n   📂 {r[3]} | ⏰ {r[6]} мин | 🔥 {r[7]} ккал\n   ─────────────\n"
+        response += f"{emoji}🍽 {r[2]}\n   📂 {r[3]} | ⏰ {r[6]} мин | 🔥 {r[7]} ккал (1x)\n   ─────────────\n"
     await update.message.reply_text(response, parse_mode="Markdown")
 
 # ========== ИЗБРАННОЕ ==========
@@ -501,7 +680,7 @@ async def show_favorites(update: Update, context: ContextTypes.DEFAULT_TYPE):
         recipes = get_recipes(user_id)
         for r in recipes:
             if r[0] == fid:
-                response += f"🍽 {r[2]}\n   📂 {r[3]} | ⏰ {r[6]} мин | 🔥 {r[7]} ккал\n   ─────────────\n"
+                response += f"🍽 {r[2]}\n   📂 {r[3]} | ⏰ {r[6]} мин | 🔥 {r[7]} ккал (1x)\n   ─────────────\n"
                 break
     await update.message.reply_text(response, parse_mode="Markdown")
 
@@ -522,7 +701,7 @@ async def top_recipes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     response = "🔥 **Топ рецептов:**\n\n"
     for i, (name, views, time, cal) in enumerate(stats[:5], 1):
-        response += f"{i}. {name}\n   👁 {views} просмотров | ⏰ {time} мин | 🔥 {cal} ккал\n"
+        response += f"{i}. {name}\n   👁 {views} просмотров | ⏰ {time} мин | 🔥 {cal} ккал (1x)\n"
     
     if not any(s[1] > 0 for s in stats):
         response += "\n📊 Нет просмотров. Ищи рецепты!"
@@ -540,7 +719,7 @@ async def holiday_recipes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     response = "🎉 **Праздничные рецепты:**\n\n"
     for r in recipes:
-        response += f"🍽 {r[2]}\n   ⏰ {r[6]} мин | 🔥 {r[7]} ккал\n   ─────────────\n"
+        response += f"🍽 {r[2]}\n   ⏰ {r[6]} мин | 🔥 {r[7]} ккал (1x)\n   ─────────────\n"
     await update.message.reply_text(response, parse_mode="Markdown")
 
 # ========== СПОРТИВНОЕ ПИТАНИЕ ==========
@@ -554,7 +733,7 @@ async def sport_recipes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     response = "🏋️ **Спортивное питание:**\n\n"
     for r in recipes:
-        response += f"🍽 {r[2]}\n   ⏰ {r[6]} мин | 🔥 {r[7]} ккал | 🥩 {r[8]}г белка\n   ─────────────\n"
+        response += f"🍽 {r[2]}\n   ⏰ {r[6]} мин | 🔥 {r[7]} ккал (1x) | 🥩 {r[8]}г белка\n   ─────────────\n"
     await update.message.reply_text(response, parse_mode="Markdown")
 
 # ========== ПО ТИПУ ПИТАНИЯ ==========
@@ -582,7 +761,7 @@ async def show_by_type(update: Update, context: ContextTypes.DEFAULT_TYPE, type_
     
     response = f"🥗 **{type_text}:**\n\n"
     for r in recipes[:15]:
-        response += f"🍽 {r[2]}\n   📂 {r[3]} | ⏰ {r[6]} мин | 🔥 {r[7]} ккал\n   ─────────────\n"
+        response += f"🍽 {r[2]}\n   📂 {r[3]} | ⏰ {r[6]} мин | 🔥 {r[7]} ккал (1x)\n   ─────────────\n"
     await update.message.reply_text(response, parse_mode="Markdown", reply_markup=main_keyboard())
 
 # ========== ЧТО ИЗ ОСТАТКОВ ==========
@@ -608,7 +787,7 @@ async def process_fridge(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         response = "🥗 **Из остатков:**\n\n"
         for r, cnt in matches[:5]:
-            response += f"🍽 {r[2]} (совпадений: {cnt})\n   ⏰ {r[6]} мин | 🔥 {r[7]} ккал\n\n"
+            response += f"🍽 {r[2]} (совпадений: {cnt})\n   ⏰ {r[6]} мин | 🔥 {r[7]} ккал (1x)\n\n"
         await update.message.reply_text(response, parse_mode="Markdown")
     
     context.user_data['fridge_mode'] = False
@@ -632,7 +811,7 @@ async def add_recipe_process(update: Update, context: ContextTypes.DEFAULT_TYPE)
     elif step == "category":
         state["category"] = text.lower()
         state["step"] = "ingredients"
-        await update.message.reply_text("Шаг 3/11: Ингредиенты через запятую")
+        await update.message.reply_text("Шаг 3/11: Ингредиенты через запятую (для стандартной порции 1x)")
     elif step == "ingredients":
         state["ingredients"] = text
         state["step"] = "instructions"
@@ -645,28 +824,28 @@ async def add_recipe_process(update: Update, context: ContextTypes.DEFAULT_TYPE)
         try:
             state["cook_time"] = int(text)
             state["step"] = "calories"
-            await update.message.reply_text("Шаг 6/11: Калории (или 0)")
+            await update.message.reply_text("Шаг 6/11: Калории для порции 1x (или 0)")
         except:
             await update.message.reply_text("❌ Введи число")
     elif step == "calories":
         try:
             state["calories"] = int(text)
             state["step"] = "protein"
-            await update.message.reply_text("Шаг 7/11: Белки (г)")
+            await update.message.reply_text("Шаг 7/11: Белки (г) для порции 1x")
         except:
             await update.message.reply_text("❌ Введи число")
     elif step == "protein":
         try:
             state["protein"] = float(text)
             state["step"] = "fat"
-            await update.message.reply_text("Шаг 8/11: Жиры (г)")
+            await update.message.reply_text("Шаг 8/11: Жиры (г) для порции 1x")
         except:
             await update.message.reply_text("❌ Введи число")
     elif step == "fat":
         try:
             state["fat"] = float(text)
             state["step"] = "carbs"
-            await update.message.reply_text("Шаг 9/11: Углеводы (г)")
+            await update.message.reply_text("Шаг 9/11: Углеводы (г) для порции 1x")
         except:
             await update.message.reply_text("❌ Введи число")
     elif step == "carbs":
@@ -694,7 +873,8 @@ async def add_recipe_process(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
         await update.message.reply_text(
             f"✅ **Рецепт «{state['name']}» сохранён!**\n\n"
-            f"🔥 {state['calories']} ккал | 🥩 {state['protein']}г б | 🧈 {state['fat']}г ж | 🍚 {state['carbs']}г у",
+            f"🔥 {state['calories']} ккал | 🥩 {state['protein']}г б | 🧈 {state['fat']}г ж | 🍚 {state['carbs']}г у (порция 1x)\n\n"
+            f"💡 Теперь можно выбирать порции: 0.5x, 1x, 1.5x, 2x!",
             parse_mode="Markdown",
             reply_markup=main_keyboard()
         )
@@ -737,6 +917,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await smart_menu(update, context)
     elif text == "📊 Статус питания":
         await status_command(update, context)
+    elif text == "📅 Меню на неделю":
+        await weekly_menu_command(update, context)
     elif text == "🛒 Список покупок":
         await shopping_list(update, context)
     elif text == "🥗 Что из остатков?":
@@ -768,10 +950,9 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🧠 **Умное меню** — подбирает блюда под твой профиль\n"
         "📊 **Статус питания** — показывает прогресс за день\n"
         "👤 **Мой профиль** — настройка цели, веса, аллергий\n"
+        "📅 **Меню на неделю** — создай план на 7 дней\n"
         "🛒 **Список покупок** — из выбранных рецептов\n\n"
-        "📝 **Добавить рецепт** — создай новое блюдо с БЖУ\n"
-        "🔍 **Найти рецепт** — поиск по названию\n"
-        "⭐ **Избранное** — сохраняй любимые рецепты\n\n"
+        "🍽 **Порции:** при добавлении в дневник можно выбрать 0.5x, 1x, 1.5x или 2x\n\n"
         "💡 **Совет:** Настрой профиль, чтобы бот подбирал идеальное меню!",
         reply_markup=main_keyboard()
     )
@@ -783,8 +964,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🎯 **Что я умею:**\n"
         "• 🧠 Подбираю меню под твои калории и аллергии\n"
         "• 📊 Отслеживаю БЖУ и остаток калорий\n"
-        "• 🛒 Составляю список покупок\n"
-        "• 🥗 Предлагаю блюда из остатков\n\n"
+        "• 📅 Составляю меню на неделю\n"
+        "• 🛒 Формирую список покупок\n"
+        "• 🍽 Регулирую порции (0.5x, 1x, 1.5x, 2x)\n\n"
         "👇 **Начни с настройки профиля:** нажми «👤 Мой профиль»\n\n"
         "Или сразу попробуй «🧠 Умное меню»!",
         parse_mode="Markdown",
@@ -818,11 +1000,13 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         recipes = get_recipes(user_id)
         for r in recipes:
             if r[0] == recipe_id:
+                profile = get_user_profile(user_id)
+                portion = profile.get('default_portion', 1.0) if profile else 1.0
                 if user_id not in user_cart:
                     user_cart[user_id] = []
-                if r not in user_cart[user_id]:
-                    user_cart[user_id].append(r)
-                    await query.answer(f"✅ {r[2]} добавлен в список покупок!")
+                if (r, portion) not in user_cart[user_id]:
+                    user_cart[user_id].append((r, portion))
+                    await query.answer(f"✅ {r[2]} добавлен в список покупок (порция {portion}x)!")
                 else:
                     await query.answer("⚠️ Уже в списке")
                 break
@@ -832,24 +1016,45 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         recipes = get_recipes(user_id)
         for r in recipes:
             if r[0] == recipe_id:
+                await query.edit_message_reply_markup(reply_markup=portion_keyboard(recipe_id, r[2]))
+                break
+    
+    elif data.startswith("portion_"):
+        parts = data.split("_")
+        recipe_id = int(parts[1])
+        portion = float(parts[2])
+        recipes = get_recipes(user_id)
+        for r in recipes:
+            if r[0] == recipe_id:
+                adj = adjust_by_portion(r, portion)
                 keyboard = InlineKeyboardMarkup([
-                    [InlineKeyboardButton("☀️ Завтрак", callback_data=f"meal_{recipe_id}_breakfast")],
-                    [InlineKeyboardButton("🌤️ Обед", callback_data=f"meal_{recipe_id}_lunch")],
-                    [InlineKeyboardButton("🌙 Ужин", callback_data=f"meal_{recipe_id}_dinner")],
-                    [InlineKeyboardButton("🍎 Перекус", callback_data=f"meal_{recipe_id}_snack")]
+                    [InlineKeyboardButton("☀️ Завтрак", callback_data=f"meal_{recipe_id}_{portion}_breakfast")],
+                    [InlineKeyboardButton("🌤️ Обед", callback_data=f"meal_{recipe_id}_{portion}_lunch")],
+                    [InlineKeyboardButton("🌙 Ужин", callback_data=f"meal_{recipe_id}_{portion}_dinner")],
+                    [InlineKeyboardButton("🍎 Перекус", callback_data=f"meal_{recipe_id}_{portion}_snack")],
+                    [InlineKeyboardButton("🔙 Назад", callback_data=f"eat_{recipe_id}")]
                 ])
-                await query.edit_message_reply_markup(reply_markup=keyboard)
+                await query.edit_message_text(
+                    f"🍽 **{r[2]}**\n\n"
+                    f"🔥 {adj['calories']} ккал\n"
+                    f"🥩 {adj['protein']}г б | 🧈 {adj['fat']}г ж | 🍚 {adj['carbs']}г у\n\n"
+                    f"Выбери приём пищи:",
+                    reply_markup=keyboard,
+                    parse_mode="Markdown"
+                )
                 break
     
     elif data.startswith("meal_"):
         parts = data.split("_")
         recipe_id = int(parts[1])
-        meal_type = parts[2]
+        portion = float(parts[2])
+        meal_type = parts[3]
         recipes = get_recipes(user_id)
         for r in recipes:
             if r[0] == recipe_id:
-                add_meal(user_id, meal_type, r[0], r[7], r[8], r[9], r[10])
-                await query.answer(f"✅ {r[2]} добавлен в дневник как {meal_type}!")
+                adj = adjust_by_portion(r, portion)
+                add_meal(user_id, meal_type, r[0], portion, adj['calories'], adj['protein'], adj['fat'], adj['carbs'])
+                await query.answer(f"✅ {r[2]} ({portion}x) добавлен в дневник как {meal_type}!")
                 await query.delete_message()
                 break
     
@@ -858,6 +1063,43 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if delete_recipe(recipe_id, user_id):
             await query.message.delete()
             await query.message.reply_text("🗑 Рецепт удалён!")
+    
+    elif data.startswith("back_"):
+        recipe_id = int(data.split("_")[1])
+        recipes = get_recipes(user_id)
+        for r in recipes:
+            if r[0] == recipe_id:
+                is_fav = r[0] in user_favorites.get(user_id, set())
+                await query.edit_message_reply_markup(reply_markup=favorite_keyboard(recipe_id, is_fav))
+                break
+    
+    # Обработка меню на неделю
+    elif data.startswith("weekday_"):
+        day_idx = int(data.split("_")[1])
+        await select_day_for_meal(update, context, day_idx)
+    
+    elif data.startswith("weekly_meal_"):
+        parts = data.split("_")
+        day_idx = int(parts[2])
+        meal_type = parts[3]
+        await select_recipe_for_meal(update, context, day_idx, meal_type)
+    
+    elif data.startswith("weekly_choose_"):
+        parts = data.split("_")
+        day_idx = int(parts[2])
+        meal_type = parts[3]
+        recipe_id = int(parts[4])
+        await save_weekly_meal(update, context, day_idx, meal_type, recipe_id)
+    
+    elif data == "weekly_back":
+        await update.callback_query.edit_message_text(
+            "📅 **Создание меню на неделю**\n\nВыбери день недели:",
+            reply_markup=weekly_menu_keyboard(),
+            parse_mode="Markdown"
+        )
+    
+    elif data == "save_weekly":
+        await save_weekly_menu_final(update, context)
 
 # ========== ЗАПУСК WEBHOOK ==========
 async def start_webhook():
@@ -870,6 +1112,7 @@ async def start_webhook():
     app.add_handler(CommandHandler("setup", setup_profile))
     app.add_handler(CommandHandler("status", status_command))
     app.add_handler(CommandHandler("smart_menu", smart_menu))
+    app.add_handler(CommandHandler("weekly_menu", weekly_menu_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(CallbackQueryHandler(handle_callback))
     
