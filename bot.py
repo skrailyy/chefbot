@@ -139,15 +139,15 @@ async def process_profile_setup(update: Update, context: ContextTypes.DEFAULT_TY
     }
     
     if step == 'current_weight':
-        try:
-            profile['current_weight'] = float(text)
-            setup['step'] = 'target_weight'
-            await update.message.reply_text(f"⚖️ Текущий вес: {text} кг\n\nШаг 2/7: Какой вес ты хочешь достичь? (в кг)")
-        except:
-            await update.message.reply_text("Введи число (например: 70)")
-            return
-    
-    elif step == 'target_weight':
+    try:
+        profile['current_weight'] = float(text)
+        setup['step'] = 'target_weight'
+        await update.message.reply_text(f"Текущий вес: {text} кг\n\n2/7: Какой вес ты хочешь?")
+    except:
+        await update.message.reply_text("Введи число (например: 70)")
+        return
+
+elif step == 'target_weight':
     try:
         profile['target_weight'] = float(text)
         if profile['target_weight'] > profile['current_weight']:
@@ -159,14 +159,7 @@ async def process_profile_setup(update: Update, context: ContextTypes.DEFAULT_TY
         else:
             goal = 'maintain'
             goal_text = "Поддержание веса"
-        
         setup['step'] = 'gender'
-        
-        await update.message.reply_text(
-            f"🎯 Целевой вес: {text} кг\n"
-            f"🎯 Цель: {goal_text}\n\n"
-            f"Шаг 3/7: Твой пол?\n1️⃣ Мужской\n2️⃣ Женский"
-        )
     except:
         await update.message.reply_text("Введи число (например: 75)")
         return
