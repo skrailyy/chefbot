@@ -2,6 +2,15 @@ import os
 import sqlite3
 import datetime
 
+# ПРИНУДИТЕЛЬНОЕ УДАЛЕНИЕ СТАРОЙ БД
+db_path = 'recipes.db'
+if os.path.exists(db_path):
+    try:
+        os.remove(db_path)
+        print("✅ Старая БД удалена")
+    except Exception as e:
+        print(f"⚠️ Ошибка удаления: {e}")
+
 conn = sqlite3.connect('recipes.db')
 cursor = conn.cursor()
 
@@ -74,7 +83,6 @@ conn.commit()
 
 # ========== ПРЕДУСТАНОВЛЕННЫЕ РЕЦЕПТЫ ==========
 DEFAULT_RECIPES = [
-    # === ЗАВТРАКИ ===
     (0, "Овсянка с ягодами", "завтрак", 
      "овсяные хлопья 50г, молоко 150мл, ягоды 50г, мёд 1ч.л",
      "Залейте овсянку молоком, варите 5 минут. Добавьте ягоды и мёд.",
@@ -95,7 +103,6 @@ DEFAULT_RECIPES = [
      "Промойте гречку, залейте водой, варите 15 минут. Добавьте масло.",
      20, 180, 6, 5, 30, "постное", "завтрак,постное,полезно"),
     
-    # === СУПЫ ===
     (0, "Куриный суп", "обед",
      "куриное филе 300г, картофель 3шт, морковь 1шт, лук 1шт, вермишель 50г, соль, перец",
      "Сварите бульон из курицы. Добавьте нарезанный картофель, морковь, лук. За 5 минут до готовности добавьте вермишель.",
@@ -111,7 +118,6 @@ DEFAULT_RECIPES = [
      "Обжарьте лук и грибы. Добавьте нарезанный картофель, залейте водой. Варите 20 минут. Измельчите блендером, добавьте сливки.",
      35, 220, 8, 14, 18, "диетическое", "суп,диетическое,грибы"),
     
-    # === ОСНОВНЫЕ БЛЮДА ===
     (0, "Курица с гречкой", "ужин",
      "куриное филе 300г, гречка 150г, лук 1шт, морковь 1шт, соль, перец",
      "Обжарьте курицу с луком и морковью. Добавьте промытую гречку, залейте водой, тушите 25 минут.",
@@ -132,12 +138,6 @@ DEFAULT_RECIPES = [
      "Обжарьте курицу с луком и морковью. Добавьте рис, залейте водой, добавьте специи. Тушите 30 минут.",
      50, 420, 32, 12, 48, "обычное", "ужин,сытно,восточное"),
     
-    (0, "Картофельное пюре с котлетой", "ужин",
-     "картофель 500г, молоко 100мл, масло 20г, фарш 300г, лук, яйцо",
-     "Сварите картофель, разомните с молоком и маслом. Сформируйте котлеты из фарша, обжарьте.",
-     45, 520, 28, 25, 48, "обычное", "ужин,сытно,классика"),
-    
-    # === САЛАТЫ ===
     (0, "Оливье", "салат",
      "колбаса 300г, картофель 4шт, морковь 2шт, яйца 4шт, огурцы солёные 3шт, горошек 1б, майонез",
      "Отварите картофель, морковь, яйца. Нарежьте все кубиками. Смешайте с горошком и майонезом.",
@@ -153,7 +153,6 @@ DEFAULT_RECIPES = [
      "Нарежьте овощи кубиками. Добавьте маслины и сыр фета. Заправьте маслом и орегано.",
      15, 280, 10, 20, 12, "диетическое", "салат,греческий,лёгкий"),
     
-    # === ДЕСЕРТЫ ===
     (0, "Творожная запеканка", "десерт",
      "творог 400г, яйца 2шт, манка 3ст.л, сахар 3ст.л, изюм 50г",
      "Смешайте все ингредиенты. Выложите в форму. Запекайте 35 минут при 180°C.",
@@ -164,21 +163,10 @@ DEFAULT_RECIPES = [
      "Разделите яйца. Желтки взбейте с сахаром, добавьте маскарпоне. Белки взбейте отдельно. Смешайте. Обмакните печенье в кофе. Выложите слоями. Посыпьте какао.",
      40, 480, 10, 30, 45, "праздничное", "десерт,итальянский,кофейный"),
     
-    (0, "Фруктовый салат", "десерт",
-     "яблоко 1шт, банан 1шт, апельсин 1шт, киви 1шт, йогурт 150г, мёд",
-     "Нарежьте фрукты. Заправьте йогуртом и мёдом.",
-     10, 150, 3, 2, 35, "диетическое", "десерт,фруктовый,лёгкий"),
-    
-    # === СПОРТИВНОЕ ПИТАНИЕ ===
     (0, "Куриное филе с гречкой", "спорт",
      "куриное филе 200г, гречка 80г, брокколи 100г, оливковое масло 1ч.л, соль",
      "Отварите гречку. Курицу запеките. Брокколи приготовьте на пару. Смешайте всё.",
      25, 420, 45, 10, 35, "спортивное", "спорт,белок,ПП"),
-    
-    (0, "Омлет с овощами", "спорт",
-     "яйца 3шт, молоко 50мл, шпинат 50г, помидоры черри 50г, соль",
-     "Взбейте яйца с молоком. Вылейте на сковороду, добавьте овощи. Готовьте под крышкой 5 минут.",
-     10, 320, 25, 22, 5, "спортивное", "спорт,белок,быстро"),
     
     (0, "Протеиновый смузи", "спорт",
      "протеин 1 ложка, банан 1шт, молоко 200мл, овсянка 30г, арахисовая паста 1ст.л",
@@ -198,61 +186,7 @@ def init_default_recipes():
 
 init_default_recipes()
 
-# ========== ФУНКЦИИ ДЛЯ РАБОТЫ С ПОРЦИЯМИ ==========
-def adjust_by_portion(recipe, portion):
-    """Возвращает скорректированные значения калорий и БЖУ под порцию"""
-    calories = int(recipe[7] * portion)
-    protein = round(recipe[8] * portion, 1)
-    fat = round(recipe[9] * portion, 1)
-    carbs = round(recipe[10] * portion, 1)
-    
-    # Корректировка ингредиентов
-    ingredients = recipe[4]
-    # Простое правило: умножаем количества (цифры) на порцию
-    import re
-    def multiply_amount(match):
-        try:
-            num = float(match.group(1))
-            new_num = num * portion
-            # Форматируем красиво
-            if new_num.is_integer():
-                return str(int(new_num)) + match.group(2)
-            else:
-                return f"{new_num:.1f}".rstrip('0').rstrip('.') + match.group(2)
-        except:
-            return match.group(0)
-    
-    new_ingredients = re.sub(r'(\d+(?:\.\d+)?)(\s*[а-яА-Яa-zA-Z]+|г|мл|шт|ст\.л|ч\.л|л|кг|гр)', multiply_amount, ingredients)
-    
-    return {
-        'calories': calories,
-        'protein': protein,
-        'fat': fat,
-        'carbs': carbs,
-        'ingredients': new_ingredients
-    }
-
-def get_recipe_with_portion(recipe, portion=1.0):
-    """Возвращает рецепт с учётом порции"""
-    adj = adjust_by_portion(recipe, portion)
-    return {
-        'id': recipe[0],
-        'user_id': recipe[1],
-        'name': recipe[2],
-        'category': recipe[3],
-        'ingredients': adj['ingredients'],
-        'instructions': recipe[5],
-        'cook_time': recipe[6],
-        'calories': adj['calories'],
-        'protein': adj['protein'],
-        'fat': adj['fat'],
-        'carbs': adj['carbs'],
-        'recipe_type': recipe[11],
-        'tags': recipe[12],
-        'portion': portion
-    }
-
-# ========== ФУНКЦИИ ДЛЯ РЕЦЕПТОВ ==========
+# ========== ФУНКЦИИ ==========
 def add_recipe(user_id, name, category, ingredients, instructions, cook_time, calories=0, protein=0, fat=0, carbs=0, recipe_type="обычное", tags=""):
     cursor.execute('''
     INSERT INTO recipes (user_id, name, category, ingredients, instructions, cook_time, calories_1x, protein_1x, fat_1x, carbs_1x, recipe_type, tags)
@@ -282,7 +216,13 @@ def delete_recipe(recipe_id, user_id):
     conn.commit()
     return cursor.rowcount > 0
 
-# ========== ФУНКЦИИ ДЛЯ ПРОФИЛЯ ==========
+def adjust_by_portion(recipe, portion):
+    calories = int(recipe[7] * portion)
+    protein = round(recipe[8] * portion, 1)
+    fat = round(recipe[9] * portion, 1)
+    carbs = round(recipe[10] * portion, 1)
+    return {'calories': calories, 'protein': protein, 'fat': fat, 'carbs': carbs}
+
 def get_user_profile(user_id):
     cursor.execute('SELECT * FROM user_profiles WHERE user_id = ?', (user_id,))
     row = cursor.fetchone()
@@ -336,7 +276,6 @@ def calculate_daily_calories(weight, height, age, gender, activity_level, goal):
     else:
         return int(tdee)
 
-# ========== ФУНКЦИИ ДЛЯ ДНЕВНИКА ПИТАНИЯ ==========
 def get_today_calories(user_id):
     today = datetime.date.today().isoformat()
     cursor.execute('SELECT SUM(calories) FROM daily_meals WHERE user_id = ? AND date = ?', (user_id, today))
@@ -362,15 +301,14 @@ def clear_today_meals(user_id):
     cursor.execute('DELETE FROM daily_meals WHERE user_id = ? AND date = ?', (user_id, today))
     conn.commit()
 
-# ========== ФУНКЦИИ ДЛЯ МЕНЮ НА НЕДЕЛЮ ==========
 def save_weekly_menu(user_id, week_start, menu):
     cursor.execute('DELETE FROM weekly_menu WHERE user_id = ? AND week_start = ?', (user_id, week_start))
     for day, meals in menu.items():
-        for meal_type, recipe_info in meals.items():
+        for meal_type, info in meals.items():
             cursor.execute('''
             INSERT INTO weekly_menu (user_id, week_start, day, meal_type, recipe_id, portion)
             VALUES (?, ?, ?, ?, ?, ?)
-            ''', (user_id, week_start, day, meal_type, recipe_info['id'], recipe_info.get('portion', 1.0)))
+            ''', (user_id, week_start, day, meal_type, info['id'], info.get('portion', 1.0)))
     conn.commit()
 
 def get_weekly_menu(user_id, week_start):
