@@ -223,6 +223,26 @@ def adjust_by_portion(recipe, portion):
     carbs = round(recipe[10] * portion, 1)
     return {'calories': calories, 'protein': protein, 'fat': fat, 'carbs': carbs}
 
+def get_recipe_with_portion(recipe, portion=1.0):
+    """Возвращает рецепт с учётом порции"""
+    adj = adjust_by_portion(recipe, portion)
+    return {
+        'id': recipe[0],
+        'user_id': recipe[1],
+        'name': recipe[2],
+        'category': recipe[3],
+        'ingredients': recipe[4],
+        'instructions': recipe[5],
+        'cook_time': recipe[6],
+        'calories': adj['calories'],
+        'protein': adj['protein'],
+        'fat': adj['fat'],
+        'carbs': adj['carbs'],
+        'recipe_type': recipe[11],
+        'tags': recipe[12],
+        'portion': portion
+    }
+
 def get_user_profile(user_id):
     cursor.execute('SELECT * FROM user_profiles WHERE user_id = ?', (user_id,))
     row = cursor.fetchone()
