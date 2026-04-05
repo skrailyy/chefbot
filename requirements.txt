@@ -1,1 +1,3 @@
-aiogram
+aiogrampython-telegram-bot==20.7
+uvicorn
+starlette
