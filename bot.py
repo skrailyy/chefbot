@@ -98,7 +98,7 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['profile_setup'] = {'step': 'current_weight'}
         await update.message.reply_text(
             "👤 **Давай настроим твой профиль!**\n\n"
-            "Шаг 1/7: Какой у тебя текущий вес? (в кг, например: 70)"
+            "Шаг 1/8: Какой у тебя текущий вес? (в кг, например: 70)"
         )
         return
     
@@ -134,7 +134,7 @@ async def setup_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['profile_setup'] = {'step': 'current_weight'}
     await update.message.reply_text(
         "🔄 **Настройка профиля**\n\n"
-        "Шаг 1/7: Какой у тебя текущий вес? (в кг, например: 70)"
+        "Шаг 1/8: Какой у тебя текущий вес? (в кг, например: 70)"
     )
 
 async def process_profile_setup(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -149,7 +149,7 @@ async def process_profile_setup(update: Update, context: ContextTypes.DEFAULT_TY
             current = float(text)
             setup['current_weight'] = current
             setup['step'] = 'target_weight'
-            await update.message.reply_text(f"✅ Текущий вес: {current} кг\n\nШаг 2/7: Какой вес хочешь достичь? (в кг)")
+            await update.message.reply_text(f"✅ Текущий вес: {current} кг\n\nШаг 2/8: Какой вес хочешь достичь? (в кг)")
         except:
             await update.message.reply_text("❌ Введи число, например: 70")
         return
@@ -160,7 +160,7 @@ async def process_profile_setup(update: Update, context: ContextTypes.DEFAULT_TY
             target = float(text)
             setup['target_weight'] = target
             setup['step'] = 'gender'
-            await update.message.reply_text(f"✅ Целевой вес: {target} кг\n\nШаг 3/7: Твой пол?\n1️⃣ Мужской\n2️⃣ Женский")
+            await update.message.reply_text(f"✅ Целевой вес: {target} кг\n\nШаг 3/8: Твой пол?\n1️⃣ Мужской\n2️⃣ Женский")
         except:
             await update.message.reply_text("❌ Введи число, например: 75")
         return
@@ -175,7 +175,7 @@ async def process_profile_setup(update: Update, context: ContextTypes.DEFAULT_TY
             await update.message.reply_text("❌ Напиши 1 (мужской) или 2 (женский)")
             return
         setup['step'] = 'age'
-        await update.message.reply_text("Шаг 4/7: Сколько тебе лет?")
+        await update.message.reply_text("Шаг 4/8: Сколько тебе лет?")
         return
     
     # Шаг 4: Возраст
@@ -183,7 +183,7 @@ async def process_profile_setup(update: Update, context: ContextTypes.DEFAULT_TY
         try:
             setup['age'] = int(text)
             setup['step'] = 'height'
-            await update.message.reply_text("Шаг 5/7: Какой у тебя рост? (в см)")
+            await update.message.reply_text("Шаг 5/8: Какой у тебя рост? (в см)")
         except:
             await update.message.reply_text("❌ Введи число, например: 30")
         return
@@ -194,7 +194,7 @@ async def process_profile_setup(update: Update, context: ContextTypes.DEFAULT_TY
             setup['height'] = float(text)
             setup['step'] = 'activity'
             await update.message.reply_text(
-                "🏃 Шаг 6/7: Твоя физическая активность?\n\n"
+                "🏃 Шаг 6/8: Твоя физическая активность?\n\n"
                 "1️⃣ Сидячий (офис, мало движения)\n"
                 "2️⃣ Лёгкая (1-2 тренировки в неделю)\n"
                 "3️⃣ Умеренная (3-4 тренировки)\n"
@@ -206,7 +206,7 @@ async def process_profile_setup(update: Update, context: ContextTypes.DEFAULT_TY
             await update.message.reply_text("❌ Введи число, например: 170")
         return
     
-    # Шаг 6: Активность и сохранение
+    # Шаг 6: Активность и расчёт калорий
     elif step == 'activity':
         activity_map = {'1': 'sedentary', '2': 'light', '3': 'moderate', '4': 'active', '5': 'very_active'}
         if text in activity_map:
@@ -225,34 +225,68 @@ async def process_profile_setup(update: Update, context: ContextTypes.DEFAULT_TY
                 setup['current_weight'], setup['height'], setup['age'],
                 setup['gender'], setup['activity_level'], goal
             )
+            setup['daily_calorie_limit'] = daily_limit
             
-            # Создаём профиль для сохранения
-            profile = {
-                'current_weight': setup['current_weight'],
-                'target_weight': setup['target_weight'],
-                'height': setup['height'],
-                'age': setup['age'],
-                'gender': setup['gender'],
-                'activity_level': setup['activity_level'],
-                'daily_calorie_limit': daily_limit,
-                'disliked_foods': [],
-                'allergies': []
-            }
-            
-            save_user_profile(user_id, profile)
-            del context.user_data['profile_setup']
-            
+            setup['step'] = 'disliked'
             await update.message.reply_text(
-                f"✅ **Профиль сохранён!**\n\n"
-                f"⚖️ Текущий вес: {setup['current_weight']} кг\n"
-                f"🎯 Целевой вес: {setup['target_weight']} кг\n"
-                f"🔥 Дневной лимит: {daily_limit} ккал\n\n"
-                f"Теперь бот будет подбирать рецепты с учётом твоей цели! 🧠",
-                parse_mode="Markdown",
-                reply_markup=main_keyboard()
+                f"✅ Активность выбрана\n\n"
+                f"🔥 **Рекомендуемая дневная норма: {daily_limit} ккал**\n\n"
+                f"Шаг 7/8: Есть ли у тебя нелюбимые продукты?\n"
+                f"Напиши через запятую (например: печень, грибы)\n"
+                f"Или напиши «нет»:"
             )
         else:
             await update.message.reply_text("❌ Введи номер от 1 до 5")
+        return
+    
+    # Шаг 7: Нелюбимые продукты
+    elif step == 'disliked':
+        if text.lower() != 'нет':
+            setup['disliked_foods'] = [x.strip() for x in text.split(',')]
+        else:
+            setup['disliked_foods'] = []
+        setup['step'] = 'allergies'
+        await update.message.reply_text(
+            "⚠️ Шаг 8/8: Есть ли у тебя аллергии?\n"
+            "Напиши через запятую (например: орехи, молоко)\n"
+            "Или напиши «нет»:"
+        )
+        return
+    
+    # Шаг 8: Аллергии и сохранение
+    elif step == 'allergies':
+        if text.lower() != 'нет':
+            setup['allergies'] = [x.strip() for x in text.split(',')]
+        else:
+            setup['allergies'] = []
+        
+        # Создаём профиль для сохранения
+        profile = {
+            'current_weight': setup['current_weight'],
+            'target_weight': setup['target_weight'],
+            'height': setup['height'],
+            'age': setup['age'],
+            'gender': setup['gender'],
+            'activity_level': setup['activity_level'],
+            'daily_calorie_limit': setup['daily_calorie_limit'],
+            'disliked_foods': setup.get('disliked_foods', []),
+            'allergies': setup.get('allergies', [])
+        }
+        
+        save_user_profile(user_id, profile)
+        del context.user_data['profile_setup']
+        
+        await update.message.reply_text(
+            f"✅ **Профиль сохранён!**\n\n"
+            f"⚖️ Текущий вес: {setup['current_weight']} кг\n"
+            f"🎯 Целевой вес: {setup['target_weight']} кг\n"
+            f"🔥 Дневной лимит: {setup['daily_calorie_limit']} ккал\n"
+            f"❌ Нелюбимые: {', '.join(profile['disliked_foods']) if profile['disliked_foods'] else 'Нет'}\n"
+            f"⚠️ Аллергии: {', '.join(profile['allergies']) if profile['allergies'] else 'Нет'}\n\n"
+            f"Теперь бот будет подбирать рецепты с учётом твоей цели! 🧠",
+            parse_mode="Markdown",
+            reply_markup=main_keyboard()
+        )
         return
 
 # ========== СТАТУС ПИТАНИЯ ==========
@@ -286,7 +320,7 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
-# ========== УМНОЕ МЕНЮ ==========
+# ========== УМНОЕ МЕНЮ С МАСШТАБИРОВАНИЕМ ПОРЦИЙ ==========
 async def smart_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     profile = get_user_profile(user_id)
@@ -303,7 +337,7 @@ async def smart_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     recipes = get_recipes(user_id)
     
-    # Фильтруем по аллергиям
+    # Фильтруем по аллергиям и нелюбимым продуктам
     filtered = []
     for r in recipes:
         ingredients = r[4].lower()
@@ -321,8 +355,7 @@ async def smart_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 break
         if disliked_found:
             continue
-        if r[7] <= remaining:
-            filtered.append(r)
+        filtered.append(r)
     
     if not filtered:
         await update.message.reply_text("❌ Нет рецептов, подходящих под твои ограничения")
@@ -333,30 +366,44 @@ async def smart_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lunches = [r for r in filtered if r[3].lower() == "обед"]
     dinners = [r for r in filtered if r[3].lower() == "ужин"]
     
-    selected = {}
-    if breakfasts:
-        selected['завтрак'] = random.choice(breakfasts)
-    if lunches:
-        selected['обед'] = random.choice(lunches)
-    if dinners:
-        selected['ужин'] = random.choice(dinners)
-    
-    if not selected:
-        await update.message.reply_text("❌ Нет подходящих рецептов. Добавь новые!")
+    if not breakfasts or not lunches or not dinners:
+        await update.message.reply_text("❌ Нет рецептов в одной из категорий (завтрак, обед, ужин)")
         return
+    
+    selected = {
+        "завтрак": random.choice(breakfasts),
+        "обед": random.choice(lunches),
+        "ужин": random.choice(dinners)
+    }
+    
+    # Рассчитываем масштаб порций для попадания в калории
+    current_total = sum(r[7] for r in selected.values())
+    
+    if current_total < remaining:
+        scale = remaining / current_total
+        scale = min(scale, 2.5)  # максимум 2.5x
+        scale = round(scale, 1)
+    else:
+        scale = 1.0
     
     response = "🧠 **Умное меню:**\n\n"
     total = 0
     for meal_type, recipe in selected.items():
+        adj = adjust_by_portion(recipe, scale)
         response += f"🍽 **{meal_type.capitalize()}:** {recipe[2]}\n"
-        response += f"   ⏰ {recipe[6]} мин | 🔥 {recipe[7]} ккал\n\n"
-        total += recipe[7]
+        response += f"   ⏰ {recipe[6]} мин | 🔥 {adj['calories']} ккал\n"
+        response += f"   🥩 {adj['protein']}г б | 🧈 {adj['fat']}г ж | 🍚 {adj['carbs']}г у\n"
+        if scale != 1.0:
+            response += f"   📈 Порция увеличена: {scale}x\n"
+        response += "\n"
+        total += adj['calories']
     
     response += f"📊 **Итого:** {total} ккал"
+    response += f"\n🎯 **Цель:** {profile['daily_calorie_limit']} ккал"
     response += f"\n💪 **Останется:** {remaining - total} ккал"
     
     await update.message.reply_text(response, parse_mode="Markdown")
-    user_cart[user_id] = [(r, 1.0) for r in selected.values()]
+    user_cart[user_id] = [(r, scale) for r in selected.values()]
 
 # ========== МЕНЮ НА СЕГОДНЯ ==========
 async def menu_today(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -397,7 +444,18 @@ async def shopping_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     ingredients = {}
     for recipe, portion in cart:
-        items = recipe[4].split(',')
+        # Масштабируем ингредиенты под порцию
+        import re
+        ingredients_text = recipe[4]
+        def multiply(match):
+            num = float(match.group(1))
+            new_num = num * portion
+            if new_num.is_integer():
+                return str(int(new_num)) + match.group(2)
+            return f"{new_num:.1f}".rstrip('0').rstrip('.') + match.group(2)
+        scaled_ingredients = re.sub(r'(\d+(?:\.\d+)?)(\s*[а-яА-Яa-zA-Z]+|г|мл|шт|ст\.л|ч\.л|л|кг)', multiply, ingredients_text)
+        
+        items = scaled_ingredients.split(',')
         for item in items:
             item = item.strip().lower()
             if item and len(item) > 2:
