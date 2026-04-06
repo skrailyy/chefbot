@@ -177,7 +177,7 @@ elif step == 'target_weight':
     return
     
     # ШАГ 3: Пол
-    elif step == 'gender':
+elif step == 'gender':
         if text in ['1', 'мужской', 'муж', 'м']:
             profile['gender'] = 'male'
         elif text in ['2', 'женский', 'жен', 'ж']:
