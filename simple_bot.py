@@ -3,7 +3,7 @@ import sqlite3
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
-TOKEN = os.environ.get("8518040511:AAFgXk0MsGcaC_la4i9hg56CTFTWjkXoknU")
+TOKEN = os.environ.get("8518040511:AAGFikxo7mr4UVFISX3DE6eTU7lx1zTJChc")
 
 # ========== БАЗА ДАННЫХ ==========
 conn = sqlite3.connect('simple.db')
