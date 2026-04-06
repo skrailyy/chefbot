@@ -190,7 +190,7 @@ elif step == 'gender':
         return
     
     # ШАГ 4: Возраст
-    elif step == 'age':
+elif step == 'age':
         try:
             profile['age'] = int(text)
             setup['step'] = 'height'
@@ -200,7 +200,7 @@ elif step == 'gender':
         return
     
     # ШАГ 5: Рост
-    elif step == 'height':
+elif step == 'height':
         try:
             profile['height'] = float(text)
             setup['step'] = 'activity'
@@ -218,7 +218,7 @@ elif step == 'gender':
         return
     
     # ШАГ 6: Активность и расчёт калорий
-    elif step == 'activity':
+elif step == 'activity':
         activity_map = {
             '1': 'sedentary',
             '2': 'light',
@@ -260,7 +260,7 @@ elif step == 'gender':
         return
     
     # ШАГ 7: Нелюбимые продукты
-    elif step == 'disliked':
+elif step == 'disliked':
         if text.lower() != 'нет':
             profile['disliked_foods'] = [x.strip() for x in text.split(',')]
         setup['step'] = 'allergies'
@@ -272,7 +272,7 @@ elif step == 'gender':
         return
     
     # ШАГ 8: Аллергии и сохранение
-    elif step == 'allergies':
+elif step == 'allergies':
         if text.lower() != 'нет':
             profile['allergies'] = [x.strip() for x in text.split(',')]
         
@@ -302,7 +302,7 @@ elif step == 'gender':
         )
         return
     
-    elif step == 'gender':
+elif step == 'gender':
         if text in ['1', 'мужской', 'муж', 'м']:
             profile['gender'] = 'male'
         elif text in ['2', 'женский', 'жен', 'ж']:
@@ -314,7 +314,7 @@ elif step == 'gender':
         await update.message.reply_text("Шаг 4/7: Сколько тебе лет?")
         return
     
-    elif step == 'age':
+elif step == 'age':
         try:
             profile['age'] = int(text)
             setup['step'] = 'height'
@@ -323,7 +323,7 @@ elif step == 'gender':
             await update.message.reply_text("❌ Введи число, например: 30")
         return
     
-    elif step == 'height':
+elif step == 'height':
         try:
             profile['height'] = float(text)
             setup['step'] = 'activity'
@@ -340,7 +340,7 @@ elif step == 'gender':
             await update.message.reply_text("❌ Введи число, например: 170")
         return
     
-    elif step == 'activity':
+elif step == 'activity':
         activity_map = {
             '1': 'sedentary',
             '2': 'light',
@@ -381,7 +381,7 @@ elif step == 'gender':
             await update.message.reply_text("❌ Введи номер от 1 до 5")
         return
     
-    elif step == 'disliked':
+elif step == 'disliked':
         if text.lower() != 'нет':
             profile['disliked_foods'] = [x.strip() for x in text.split(',')]
         setup['step'] = 'allergies'
@@ -392,7 +392,7 @@ elif step == 'gender':
         )
         return
     
-    elif step == 'allergies':
+elif step == 'allergies':
         if text.lower() != 'нет':
             profile['allergies'] = [x.strip() for x in text.split(',')]
         
