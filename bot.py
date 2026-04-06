@@ -143,7 +143,7 @@ async def process_profile_setup(update: Update, context: ContextTypes.DEFAULT_TY
     setup = context.user_data.get('profile_setup', {})
     step = setup.get('step')
     
-    # Создаём новый профиль (не загружаем старый)
+    # ВСЕГДА СОЗДАЁМ НОВЫЙ ПРОФИЛЬ (НЕ ЗАГРУЖАЕМ СТАРЫЙ!)
     profile = {
         'current_weight': 70.0,
         'target_weight': 70.0,
