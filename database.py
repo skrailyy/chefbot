@@ -2,7 +2,7 @@ import os
 import sqlite3
 import datetime
 
-# ПРИНУДИТЕЛЬНОЕ УДАЛЕНИЕ СТАРОЙ БД (ВРЕМЕННО)
+# ПРИНУДИТЕЛЬНОЕ УДАЛЕНИЕ СТАРОЙ БД (ТОЛЬКО СЕЙЧАС, ПОТОМ УБЕРИ)
 if os.path.exists('recipes.db'):
     os.remove('recipes.db')
     print("✅ Старая БД удалена")
@@ -29,19 +29,19 @@ CREATE TABLE IF NOT EXISTS recipes (
 )
 ''')
 
-# ========== ТАБЛИЦА ПРОФИЛЕЙ ==========
+# ========== ТАБЛИЦА ПРОФИЛЕЙ (ИСПРАВЛЕННАЯ) ==========
 cursor.execute('''
 CREATE TABLE IF NOT EXISTS user_profiles (
     user_id INTEGER PRIMARY KEY,
-    current_weight REAL DEFAULT 70,
-    target_weight REAL DEFAULT 70,
-    height REAL DEFAULT 170,
-    age INTEGER DEFAULT 30,
-    gender TEXT DEFAULT 'male',
-    activity_level TEXT DEFAULT 'moderate',
-    daily_calorie_limit INTEGER DEFAULT 2000,
-    disliked_foods TEXT DEFAULT '',
-    allergies TEXT DEFAULT ''
+    current_weight REAL,
+    target_weight REAL,
+    height REAL,
+    age INTEGER,
+    gender TEXT,
+    activity_level TEXT,
+    daily_calorie_limit INTEGER,
+    disliked_foods TEXT,
+    allergies TEXT
 )
 ''')
 
@@ -227,19 +227,26 @@ def get_recipe_with_portion(recipe, portion=1.0):
         'portion': portion
     }
 
-# ========== ФУНКЦИИ ДЛЯ ПРОФИЛЯ ==========
+# ========== ФУНКЦИИ ДЛЯ ПРОФИЛЯ (ИСПРАВЛЕННЫЕ) ==========
 def get_user_profile(user_id):
     cursor.execute('SELECT * FROM user_profiles WHERE user_id = ?', (user_id,))
     row = cursor.fetchone()
     if row:
         current = row[1]
         target = row[2]
+        
         if target > current:
             goal = 'gain'
         elif target < current:
             goal = 'lose'
         else:
             goal = 'maintain'
+        
+        # Рассчитываем дневной лимит калорий на основе текущего веса и цели
+        daily_limit = calculate_daily_calories(
+            current, row[3], row[4], row[5], row[6], goal
+        )
+        
         return {
             'goal': goal,
             'current_weight': current,
@@ -248,27 +255,33 @@ def get_user_profile(user_id):
             'age': row[4],
             'gender': row[5],
             'activity_level': row[6],
-            'daily_calorie_limit': row[7],
-            'disliked_foods': [x for x in row[8].split(',') if x] if row[8] else [],
-            'allergies': [x for x in row[9].split(',') if x] if row[9] else []
+            'daily_calorie_limit': daily_limit,
+            'disliked_foods': row[8].split(',') if row[8] else [],
+            'allergies': row[9].split(',') if row[9] else []
         }
     return None
 
 def save_user_profile(user_id, profile):
-    print(f"🔍 ДИАГНОСТИКА: user_id={user_id}, target_weight={profile['target_weight']}, calories={profile['daily_calorie_limit']}")
     cursor.execute('''
     INSERT OR REPLACE INTO user_profiles 
     (user_id, current_weight, target_weight, height, age, gender, activity_level, daily_calorie_limit, disliked_foods, allergies)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (
-        user_id, profile['current_weight'], profile['target_weight'], profile['height'],
-        profile['age'], profile['gender'], profile['activity_level'],
-        profile['daily_calorie_limit'], ','.join(profile['disliked_foods']),
+        user_id, 
+        profile['current_weight'], 
+        profile['target_weight'], 
+        profile['height'],
+        profile['age'], 
+        profile['gender'], 
+        profile['activity_level'],
+        profile['daily_calorie_limit'], 
+        ','.join(profile['disliked_foods']),
         ','.join(profile['allergies'])
     ))
     conn.commit()
 
 def calculate_daily_calories(weight, height, age, gender, activity_level, goal):
+    # Базовый расчёт BMR
     if gender == 'male':
         bmr = 88.36 + (13.4 * weight) + (4.8 * height) - (5.7 * age)
     else:
