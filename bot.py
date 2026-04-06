@@ -143,28 +143,13 @@ async def process_profile_setup(update: Update, context: ContextTypes.DEFAULT_TY
     setup = context.user_data.get('profile_setup', {})
     step = setup.get('step')
     
-    # ВСЕГДА СОЗДАЁМ НОВЫЙ ПРОФИЛЬ (НЕ ЗАГРУЖАЕМ СТАРЫЙ!)
-    profile = {
-        'current_weight': 70.0,
-        'target_weight': 70.0,
-        'height': 170.0,
-        'age': 30,
-        'gender': 'male',
-        'activity_level': 'moderate',
-        'daily_calorie_limit': 2000,
-        'disliked_foods': [],
-        'allergies': []
-    }
-    
     # Шаг 1: Текущий вес
     if step == 'current_weight':
         try:
-            profile['current_weight'] = float(text)
+            current = float(text)
+            setup['current_weight'] = current
             setup['step'] = 'target_weight'
-            await update.message.reply_text(
-                f"✅ Текущий вес: {text} кг\n\n"
-                f"Шаг 2/7: Какой вес ты хочешь достичь? (в кг)"
-            )
+            await update.message.reply_text(f"✅ Текущий вес: {current} кг\n\nШаг 2/7: Какой вес хочешь достичь? (в кг)")
         except:
             await update.message.reply_text("❌ Введи число, например: 70")
         return
@@ -173,12 +158,9 @@ async def process_profile_setup(update: Update, context: ContextTypes.DEFAULT_TY
     elif step == 'target_weight':
         try:
             target = float(text)
-            profile['target_weight'] = target
+            setup['target_weight'] = target
             setup['step'] = 'gender'
-            await update.message.reply_text(
-                f"✅ Целевой вес: {target} кг\n\n"
-                f"Шаг 3/7: Твой пол?\n1️⃣ Мужской\n2️⃣ Женский"
-            )
+            await update.message.reply_text(f"✅ Целевой вес: {target} кг\n\nШаг 3/7: Твой пол?\n1️⃣ Мужской\n2️⃣ Женский")
         except:
             await update.message.reply_text("❌ Введи число, например: 75")
         return
@@ -186,9 +168,9 @@ async def process_profile_setup(update: Update, context: ContextTypes.DEFAULT_TY
     # Шаг 3: Пол
     elif step == 'gender':
         if text in ['1', 'мужской', 'муж', 'м']:
-            profile['gender'] = 'male'
+            setup['gender'] = 'male'
         elif text in ['2', 'женский', 'жен', 'ж']:
-            profile['gender'] = 'female'
+            setup['gender'] = 'female'
         else:
             await update.message.reply_text("❌ Напиши 1 (мужской) или 2 (женский)")
             return
@@ -199,7 +181,7 @@ async def process_profile_setup(update: Update, context: ContextTypes.DEFAULT_TY
     # Шаг 4: Возраст
     elif step == 'age':
         try:
-            profile['age'] = int(text)
+            setup['age'] = int(text)
             setup['step'] = 'height'
             await update.message.reply_text("Шаг 5/7: Какой у тебя рост? (в см)")
         except:
@@ -209,7 +191,7 @@ async def process_profile_setup(update: Update, context: ContextTypes.DEFAULT_TY
     # Шаг 5: Рост
     elif step == 'height':
         try:
-            profile['height'] = float(text)
+            setup['height'] = float(text)
             setup['step'] = 'activity'
             await update.message.reply_text(
                 "🏃 Шаг 6/7: Твоя физическая активность?\n\n"
@@ -224,89 +206,53 @@ async def process_profile_setup(update: Update, context: ContextTypes.DEFAULT_TY
             await update.message.reply_text("❌ Введи число, например: 170")
         return
     
-    # Шаг 6: Активность и расчёт калорий
+    # Шаг 6: Активность и сохранение
     elif step == 'activity':
-        activity_map = {
-            '1': 'sedentary',
-            '2': 'light',
-            '3': 'moderate',
-            '4': 'active',
-            '5': 'very_active'
-        }
+        activity_map = {'1': 'sedentary', '2': 'light', '3': 'moderate', '4': 'active', '5': 'very_active'}
         if text in activity_map:
-            profile['activity_level'] = activity_map[text]
+            setup['activity_level'] = activity_map[text]
             
             # Определяем цель
-            if profile['target_weight'] > profile['current_weight']:
+            if setup['target_weight'] > setup['current_weight']:
                 goal = 'gain'
-            elif profile['target_weight'] < profile['current_weight']:
+            elif setup['target_weight'] < setup['current_weight']:
                 goal = 'lose'
             else:
                 goal = 'maintain'
             
             # Рассчитываем калории
-            profile['daily_calorie_limit'] = calculate_daily_calories(
-                profile['current_weight'],
-                profile['height'],
-                profile['age'],
-                profile['gender'],
-                profile['activity_level'],
-                goal
+            daily_limit = calculate_daily_calories(
+                setup['current_weight'], setup['height'], setup['age'],
+                setup['gender'], setup['activity_level'], goal
             )
             
-            setup['step'] = 'disliked'
+            # Создаём профиль для сохранения
+            profile = {
+                'current_weight': setup['current_weight'],
+                'target_weight': setup['target_weight'],
+                'height': setup['height'],
+                'age': setup['age'],
+                'gender': setup['gender'],
+                'activity_level': setup['activity_level'],
+                'daily_calorie_limit': daily_limit,
+                'disliked_foods': [],
+                'allergies': []
+            }
+            
+            save_user_profile(user_id, profile)
+            del context.user_data['profile_setup']
+            
             await update.message.reply_text(
-                f"✅ Активность выбрана\n\n"
-                f"🔥 **Рекомендуемая дневная норма: {profile['daily_calorie_limit']} ккал**\n\n"
-                f"Шаг 7/7: Есть ли у тебя нелюбимые продукты?\n"
-                f"Напиши через запятую (например: печень, грибы)\n"
-                f"Или напиши «нет»:"
+                f"✅ **Профиль сохранён!**\n\n"
+                f"⚖️ Текущий вес: {setup['current_weight']} кг\n"
+                f"🎯 Целевой вес: {setup['target_weight']} кг\n"
+                f"🔥 Дневной лимит: {daily_limit} ккал\n\n"
+                f"Теперь бот будет подбирать рецепты с учётом твоей цели! 🧠",
+                parse_mode="Markdown",
+                reply_markup=main_keyboard()
             )
         else:
             await update.message.reply_text("❌ Введи номер от 1 до 5")
-        return
-    
-    # Шаг 7: Нелюбимые продукты
-    elif step == 'disliked':
-        if text.lower() != 'нет':
-            profile['disliked_foods'] = [x.strip() for x in text.split(',')]
-        setup['step'] = 'allergies'
-        await update.message.reply_text(
-            "⚠️ Есть ли у тебя аллергии?\n"
-            "Напиши через запятую (например: орехи, молоко)\n"
-            "Или напиши «нет»:"
-        )
-        return
-    
-    # Шаг 8: Аллергии и сохранение
-    elif step == 'allergies':
-        if text.lower() != 'нет':
-            profile['allergies'] = [x.strip() for x in text.split(',')]
-        
-        # Сохраняем профиль
-        save_user_profile(user_id, profile)
-        del context.user_data['profile_setup']
-        
-        # Определяем текст цели
-        if profile['target_weight'] > profile['current_weight']:
-            goal_text = "📈 Набор массы"
-        elif profile['target_weight'] < profile['current_weight']:
-            goal_text = "📉 Похудение"
-        else:
-            goal_text = "📊 Поддержание веса"
-        
-        await update.message.reply_text(
-            f"✅ **Профиль сохранён!**\n\n"
-            f"🎯 Цель: {goal_text}\n"
-            f"⚖️ Текущий вес: {profile['current_weight']} кг\n"
-            f"🎯 Целевой вес: {profile['target_weight']} кг\n"
-            f"🔥 Дневной лимит: {profile['daily_calorie_limit']} ккал\n"
-            f"❌ Нелюбимые: {', '.join(profile['disliked_foods']) if profile['disliked_foods'] else 'Нет'}\n"
-            f"⚠️ Аллергии: {', '.join(profile['allergies']) if profile['allergies'] else 'Нет'}\n\n"
-            f"Теперь бот будет подбирать рецепты с учётом твоей цели! 🧠",
-            parse_mode="Markdown",
-            reply_markup=main_keyboard()
-        )
         return
 
 # ========== СТАТУС ПИТАНИЯ ==========
