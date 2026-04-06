@@ -149,22 +149,22 @@ profile = {
     'allergies': []
 }
     
-    # ШАГ 1: Текущий вес
-if step == 'current_weight':
-    try:
+       # Шаг 1: Текущий вес
+        if step == 'current_weight':
+        try:
             profile['current_weight'] = float(text)
             setup['step'] = 'target_weight'
             await update.message.reply_text(
                 f"✅ Текущий вес: {text} кг\n\n"
                 f"Шаг 2/7: Какой вес ты хочешь достичь? (в кг)"
             )
-    except:
+        except:
             await update.message.reply_text("❌ Введи число, например: 70")
-    return
-    
-    # ШАГ 2: Целевой вес
-elif step == 'target_weight':
-    try:
+        return
+
+    # Шаг 2: Целевой вес
+    elif step == 'target_weight':
+        try:
             target = float(text)
             profile['target_weight'] = target
             setup['step'] = 'gender'
@@ -172,12 +172,12 @@ elif step == 'target_weight':
                 f"✅ Целевой вес: {target} кг\n\n"
                 f"Шаг 3/7: Твой пол?\n1️⃣ Мужской\n2️⃣ Женский"
             )
-    except:
+        except:
             await update.message.reply_text("❌ Введи число, например: 75")
-    return
-    
-    # ШАГ 3: Пол
-elif step == 'gender':
+        return
+
+    # Шаг 3: Пол
+    elif step == 'gender':
         if text in ['1', 'мужской', 'муж', 'м']:
             profile['gender'] = 'male'
         elif text in ['2', 'женский', 'жен', 'ж']:
@@ -188,9 +188,9 @@ elif step == 'gender':
         setup['step'] = 'age'
         await update.message.reply_text("Шаг 4/7: Сколько тебе лет?")
         return
-    
-    # ШАГ 4: Возраст
-elif step == 'age':
+
+    # Шаг 4: Возраст
+    elif step == 'age':
         try:
             profile['age'] = int(text)
             setup['step'] = 'height'
@@ -198,9 +198,9 @@ elif step == 'age':
         except:
             await update.message.reply_text("❌ Введи число, например: 30")
         return
-    
-    # ШАГ 5: Рост
-elif step == 'height':
+
+    # Шаг 5: Рост
+    elif step == 'height':
         try:
             profile['height'] = float(text)
             setup['step'] = 'activity'
@@ -216,9 +216,9 @@ elif step == 'height':
         except:
             await update.message.reply_text("❌ Введи число, например: 170")
         return
-    
-    # ШАГ 6: Активность и расчёт калорий
-elif step == 'activity':
+
+    # Шаг 6: Активность
+    elif step == 'activity':
         activity_map = {
             '1': 'sedentary',
             '2': 'light',
@@ -257,6 +257,49 @@ elif step == 'activity':
             )
         else:
             await update.message.reply_text("❌ Введи номер от 1 до 5")
+        return
+
+    # Шаг 7: Нелюбимые продукты
+    elif step == 'disliked':
+        if text.lower() != 'нет':
+            profile['disliked_foods'] = [x.strip() for x in text.split(',')]
+        setup['step'] = 'allergies'
+        await update.message.reply_text(
+            f"⚠️ Есть ли у тебя аллергии?\n"
+            f"Напиши через запятую (например: орехи, молоко)\n"
+            f"Или напиши «нет»:"
+        )
+        return
+
+    # Шаг 8: Аллергии и сохранение
+    elif step == 'allergies':
+        if text.lower() != 'нет':
+            profile['allergies'] = [x.strip() for x in text.split(',')]
+        
+        # Сохраняем профиль
+        save_user_profile(user_id, profile)
+        del context.user_data['profile_setup']
+        
+        # Определяем текст цели
+        if profile['target_weight'] > profile['current_weight']:
+            goal_text = "📈 Набор массы"
+        elif profile['target_weight'] < profile['current_weight']:
+            goal_text = "📉 Похудение"
+        else:
+            goal_text = "📊 Поддержание веса"
+        
+        await update.message.reply_text(
+            f"✅ **Профиль сохранён!**\n\n"
+            f"🎯 Цель: {goal_text}\n"
+            f"⚖️ Текущий вес: {profile['current_weight']} кг\n"
+            f"🎯 Целевой вес: {profile['target_weight']} кг\n"
+            f"🔥 Дневной лимит: {profile['daily_calorie_limit']} ккал\n"
+            f"❌ Нелюбимые: {', '.join(profile['disliked_foods']) if profile['disliked_foods'] else 'Нет'}\n"
+            f"⚠️ Аллергии: {', '.join(profile['allergies']) if profile['allergies'] else 'Нет'}\n\n"
+            f"Теперь бот будет подбирать рецепты с учётом твоей цели! 🧠",
+            parse_mode="Markdown",
+            reply_markup=main_keyboard()
+        )
         return
     
     # ШАГ 7: Нелюбимые продукты
