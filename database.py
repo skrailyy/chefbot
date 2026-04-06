@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS recipes (
 )
 ''')
 
-# ========== ТАБЛИЦА ПРОФИЛЕЙ (ИСПРАВЛЕННАЯ) ==========
+# ========== ТАБЛИЦА ПРОФИЛЕЙ ==========
 cursor.execute('''
 CREATE TABLE IF NOT EXISTS user_profiles (
     user_id INTEGER PRIMARY KEY,
@@ -227,7 +227,7 @@ def get_recipe_with_portion(recipe, portion=1.0):
         'portion': portion
     }
 
-# ========== ФУНКЦИИ ДЛЯ ПРОФИЛЯ (ИСПРАВЛЕННЫЕ) ==========
+# ========== ФУНКЦИИ ДЛЯ ПРОФИЛЯ ==========
 def get_user_profile(user_id):
     cursor.execute('SELECT * FROM user_profiles WHERE user_id = ?', (user_id,))
     row = cursor.fetchone()
@@ -242,11 +242,6 @@ def get_user_profile(user_id):
         else:
             goal = 'maintain'
         
-        # Рассчитываем дневной лимит калорий на основе текущего веса и цели
-        daily_limit = calculate_daily_calories(
-            current, row[3], row[4], row[5], row[6], goal
-        )
-        
         return {
             'goal': goal,
             'current_weight': current,
@@ -255,13 +250,14 @@ def get_user_profile(user_id):
             'age': row[4],
             'gender': row[5],
             'activity_level': row[6],
-            'daily_calorie_limit': daily_limit,
+            'daily_calorie_limit': row[7],
             'disliked_foods': row[8].split(',') if row[8] else [],
             'allergies': row[9].split(',') if row[9] else []
         }
     return None
 
 def save_user_profile(user_id, profile):
+    print(f"🔍 СОХРАНЕНИЕ: user_id={user_id}, current={profile['current_weight']}, target={profile['target_weight']}, limit={profile['daily_calorie_limit']}")
     cursor.execute('''
     INSERT OR REPLACE INTO user_profiles 
     (user_id, current_weight, target_weight, height, age, gender, activity_level, daily_calorie_limit, disliked_foods, allergies)
@@ -281,7 +277,6 @@ def save_user_profile(user_id, profile):
     conn.commit()
 
 def calculate_daily_calories(weight, height, age, gender, activity_level, goal):
-    # Базовый расчёт BMR
     if gender == 'male':
         bmr = 88.36 + (13.4 * weight) + (4.8 * height) - (5.7 * age)
     else:
